@@ -169,22 +169,88 @@ vercel env add DB_HOST production
 
 ## 5. 部署步骤
 
+### 5.0 先把数据库准备好（否则部署成功但接口全 500）
+
+Vercel 不提供数据库，`/api/*` 的第一件事就是查库。所以先在云库建表并导数据：
+
+```bash
+# 1) 本地导出（结构 + 数据；--schema-only 只导结构）
+bash deploy/vercel/dump-for-cloud.sh
+
+# 2) 导入云库
+mysql -h <云库host> -P <端口> -u <用户> -p <库名> < dootask-cloud.sql
+```
+
+脚本会自动做两项兼容性预检：MariaDB 10.5+ 文件头那行 `/*!999999 enable the sandbox mode */` 会被过滤（否则 MySQL 8 / TiDB 直接报语法错）；同时提示是否含外键（PlanetScale 不支持外键，含外键请改用 TiDB Cloud 或 RDS）。
+
+导完在云库执行 `SELECT COUNT(*) FROM pre_users;` 确认非 0，再继续下一步。
+
+### 5.1 GitHub 集成部署（推荐，本仓库已就绪）
+
+仓库地址 `https://github.com/ft548548/448566847`，**public**，默认分支 `main`，最新提交已包含本文所有部署文件。public 仓库无需给 Vercel 安装 GitHub App 到组织，只需首次授权 Vercel 读取你的 GitHub。
+
+1. 打开 <https://vercel.com/new> → **Import Git Repository** → 选中 `ft548548/448566847`。
+2. **Configure Project** 页逐项填写：
+
+| 字段             | 填什么                         | 不这么填会怎样                                                                  |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------- |
+| Project Name     | `dootask`                      | 只影响 `*.vercel.app` 子域，随意                                                |
+| Framework Preset | **Other**                      | 选成 Node.js/Next.js 会注入 `npm run build`，触发仓库里的 docker 编排脚本而失败 |
+| Root Directory   | `./`（保持默认）               | 选成 `api` 会让函数文件找不到 `vendor/`                                         |
+| Build Command    | **清空**（点 Override 后留空） | Dashboard 的优先级高于 `vercel.json`，一旦填了 `npm run build` 就会失败         |
+| Output Directory | **清空**                       | 填了会导致静态资源 404                                                          |
+| Install Command  | **清空**                       | 会执行 427MB 的 `npm install`，且对 PHP 无用                                    |
+| Node.js Version  | 20 或 22 均可                  | 不影响结果，不参与实际构建                                                      |
+
+3. 展开 **Environment Variables**，一次粘贴下面这份（值换成你自己的），Production 与 Preview 都要：
+
+```
+APP_NAME=DooTask
+APP_ENV=production
+APP_KEY=base64:把 php artisan key:generate --show 的输出粘这里
+APP_DEBUG=false
+APP_URL=https://dootask.vercel.app
+APP_STORAGE_PATH=/tmp/dootask-storage
+DB_CONNECTION=mysql
+DB_HOST=
+DB_PORT=3306
+DB_DATABASE=
+DB_USERNAME=
+DB_PASSWORD=
+REDIS_HOST=
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+SESSION_DRIVER=redis
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+LOG_CHANNEL=stderr
+PLATFORM_CONTRACT_ENABLED=true
+```
+
+> `SESSION_DRIVER` / `CACHE_DRIVER` 不给 Redis 的话，默认 `file` 写在只读盘上，表现为**登录成功但立刻掉线**，排起来很费时间，建议一开始就配。
+
+4. 点 **Deploy**，首次构建约 2 ～ 4 分钟（主要是 composer 装依赖）。
+5. 部署完成后进 **Settings → Deployment Protection**，确认生产环境**没有**开启（开了会让 API 返回 401 和 Vercel 登录页）。
+6. 后续行为：push 到 `main` 自动发生产环境，其他分支与 PR 自动发 Preview 环境——**这意味着以后每次 push 都会重新部署**，改动前留意。
+
+7. 拿到地址后跑验收：
+
+```bash
+bash deploy/vercel/verify.sh https://dootask.vercel.app
+```
+
+### 5.2 CLI 部署（备用）
+
 ```bash
 cd D:/dt-run/dootask
-
-# 1) 安装并登录
 npm i -g vercel
 vercel login
-
-# 2) 关联项目（首次会问项目名、目录，Framework 选 Other）
-vercel link
-
-# 3) 配环境变量（至少 APP_KEY / DB_* / REDIS_* 各一份）
+vercel link              # 首次会问项目名，Framework 选 Other
 vercel env add APP_KEY production
-
-# 4) 先发 Preview 验证，再上生产
-vercel
-vercel --prod
+# …其余环境变量同理
+vercel                   # 先发 Preview
+vercel --prod            # 再上生产
 ```
 
 部署完成后，Vercel 会给形如 `https://<project>-<hash>-<team>.vercel.app` 的地址，再执行第 6 节的验收。
