@@ -133,3 +133,26 @@ Follow these steps to complete the project migration after the new project is in
 # Running commands in a project
 ./cmd uninstall
 ```
+
+## Platform contract alignment (五平台约束规范 V2.0)
+
+This fork is aligned with the campus five-platform spec as far as possible **without changing any
+existing behaviour**. All alignment is additive: one middleware, new docs, a static demo.
+
+- Contract middleware: `app/Http/Middleware/PlatformContract.php` (validates/echoes `X-Request-Id`,
+  whitelists `X-App-Code`, appends `code` + `requestId` to the legacy `ret/msg/data` envelope, writes
+  `storage/logs/platform-access.log`). Disable with `PLATFORM_CONTRACT_ENABLED=false`.
+- API contract: `docs/platform/openapi.yaml` (23 paths, reconciled against controller methods)
+- Events, permissions, field mapping, network matrix, logging, deviations: `docs/platform/`
+- Offline demo (no network, mock data labelled): `demo/index.html`
+
+```bash
+npm run lint        # php -l over app/ routes/ tests/ database/ config/
+npm run typecheck   # contract reconciliation (OpenAPI <-> controllers, middleware wiring)
+npm run format:check
+npm run test        # PHPUnit, includes PlatformContractTest
+npm run check       # all of the above
+```
+
+Start here: [`docs/platform/README.md`](docs/platform/README.md) · Deviations:
+[`docs/platform/deviations.md`](docs/platform/deviations.md)

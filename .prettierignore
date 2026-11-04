@@ -1,0 +1,17 @@
+# 第三方与生成物
+node_modules/
+vendor/
+public/js/
+public/css/
+public/fonts/
+storage/
+bootstrap/cache/
+
+# 上游存量前端资源（Vue 2 单文件组件，格式化会破坏构建产物，见 docs/platform/deviations.md DV-06）
+resources/
+
+# 锁文件与二进制
+package-lock.json
+composer.lock
+*.min.js
+*.map

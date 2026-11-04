@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>实训工坊 · 契约对齐演示（演示数据）</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --line: #e3e6ec;
+        --text: #1c2028;
+        --muted: #5b636f;
+        --brand: #2f5bea;
+        --ok: #0f8a4a;
+        --warn: #b4690e;
+        --bad: #c0392b;
+        --code-bg: #f2f4f8;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 600;
+      }
+      .badge {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #fff4e5;
+        color: var(--warn);
+        border: 1px solid #f3d9b0;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 20px 24px 48px;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px 20px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 0 0 4px;
+        font-weight: 600;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12.5px;
+        margin: 0 0 14px;
+      }
+      .roles {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .roles button {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--text);
+        padding: 6px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .roles button[aria-pressed="true"] {
+        border-color: var(--brand);
+        background: #eef2ff;
+        color: var(--brand);
+        font-weight: 600;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+        background: #fafbfc;
+      }
+      .yes {
+        color: var(--ok);
+      }
+      .no {
+        color: var(--bad);
+      }
+      .steps {
+        display: grid;
+        gap: 10px;
+      }
+      .step {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 14px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .step .idx {
+        flex: 0 0 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #eef2ff;
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .step.done {
+        border-color: #bfe3cd;
+        background: #f6fbf8;
+      }
+      .step .body {
+        flex: 1;
+      }
+      .step .title {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .step .desc {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        overflow: auto;
+        font-size: 12px;
+        line-height: 1.5;
+        margin: 8px 0 0;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .col {
+        flex: 1 1 320px;
+      }
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+      }
+      .actions button {
+        border: 1px solid var(--brand);
+        background: var(--brand);
+        color: #fff;
+        padding: 7px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .actions button.ghost {
+        background: #fff;
+        color: var(--brand);
+      }
+      footer {
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        padding: 8px 0 0;
+      }
+      .k {
+        color: var(--brand);
+        font-family: ui-monospace, Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>实训工坊 · 平台契约演示</h1>
+      <span class="badge">演示数据</span>
+      <span class="hint" style="margin: 0"
+        >本页为静态演示，不连接任何后端，不代表真实登录或真实事件</span
+      >
+    </header>
+
+    <main>
+      <section>
+        <h2>一、按身份切换，看权限差异</h2>
+        <p class="hint">
+          角色只影响下面表格的判定结果。真实系统中，所有拦截都在服务端完成 （<span class="k"
+            >Project::authData()</span
+          >
+          数据范围 + 归属校验 + <span class="k">User::isAdmin()</span>）， 前端隐藏按钮不算授权。
+        </p>
+        <div class="roles" id="roles">
+          <button data-role="student" aria-pressed="true">学生 · 陈子墨</button>
+          <button data-role="teacher" aria-pressed="false">教师 · 赵明远</button>
+          <button data-role="admin" aria-pressed="false">管理员 · 系统管理员</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>动作（规范权限点）</th>
+              <th>本人可否执行</th>
+              <th>服务端判定依据</th>
+            </tr>
+          </thead>
+          <tbody id="permBody"></tbody>
+        </table>
+        <p class="hint" style="margin: 12px 0 0">
+          注：DooTask 没有 <span class="k">teacher</span> 角色，教师与普通成员权限一致，
+          这是已登记的偏离（DV-01），不是本页的简化。
+        </p>
+      </section>
+
+      <section>
+        <h2>二、一条上下游联动流程</h2>
+        <p class="hint">
+          考试通过 → 获得工坊准入 → 发布招募 → 学生报名 →
+          审批入队。每步标注权威平台与产生的事件（演示数据）。
+        </p>
+        <div class="steps" id="steps"></div>
+        <div class="actions">
+          <button id="next">执行下一步</button>
+          <button id="reset" class="ghost">重置</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>三、事件封套（10 字段）</h2>
+        <p class="hint">
+          规范 §9.3。DooTask 本期不生产事件（DV-11），以下为契约示例，用于确认字段形状。
+        </p>
+        <pre id="envelope"></pre>
+      </section>
+
+      <section>
+        <h2>四、统一响应信封（叠加式）</h2>
+        <p class="hint">
+          DooTask 保留 <span class="k">ret/msg/data</span>，在其后追加
+          <span class="k">code/requestId</span>。
+          右栏是真实接口返回（脱敏），左栏是规范要求的字段位置。
+        </p>
+        <div class="row">
+          <div class="col">
+            <pre>
+{
+  "ret": 1,               // 既有：>0 成功
+  "msg": "success",
+  "data": { ... },
+
+  "code": "OK",           // 新增：规范 §8.2
+  "requestId": "req_5860286715a5a976fcdc"
+}</pre
+            >
+          </div>
+          <div class="col">
+            <pre>
+// GET /api/system/setting 实测
+{
+  "ret": 1,
+  "msg": "success",
+  "data": { "reg": "open", "login_code": "auto" },
+  "code": "OK",
+  "requestId": "req_5860286715a5a976fcdc"
+}
+
+// 响应头同时回带
+X-Request-Id: req_5860286715a5a976fcdc</pre
+            >
+          </div>
+        </div>
+      </section>
+
+      <footer>演示数据 · 与真实账号、真实事件无关</footer>
+    </main>
+
+    <script>
+      // ---------- 权限差异（对应 docs/platform/permissions.md） ----------
+      const ROLES = {
+        student: {
+          label: "学生",
+          perms: {
+            "project:read": [true, "Project::authData() 数据范围"],
+            "project:create": [true, "登录即可"],
+            "recruitment:apply": [true, "登录用户；重复报名被唯一索引拦截"],
+            "recruitment:review": [false, "仅招募发布者可审批"],
+            "project:audit": [false, "DooTask 无验收流程（未实现）"],
+            "system:setting:write": [false, "仅管理员"],
+          },
+        },
+        teacher: {
+          label: "教师",
+          perms: {
+            "project:read": [true, "Project::authData() 数据范围"],
+            "project:create": [true, "登录即可"],
+            "recruitment:apply": [true, "登录用户；重复报名被唯一索引拦截"],
+            "recruitment:review": [true, "仅当本人是招募发布者"],
+            "project:audit": [false, "DooTask 无验收流程（未实现）"],
+            "system:setting:write": [false, "仅管理员"],
+          },
+        },
+        admin: {
+          label: "管理员",
+          perms: {
+            "project:read": [true, "Project::authData() 数据范围"],
+            "project:create": [true, "登录即可"],
+            "recruitment:apply": [true, "登录用户"],
+            "recruitment:review": [true, "发布者或管理员"],
+            "project:audit": [false, "DooTask 无验收流程（未实现）"],
+            "system:setting:write": [true, "User::isAdmin() 读 identity 含 admin"],
+          },
+        },
+      };
+
+      const roleButtons = document.querySelectorAll("#roles button");
+      const permBody = document.getElementById("permBody");
+
+      function renderPerms(role) {
+        const perms = ROLES[role].perms;
+        permBody.innerHTML = Object.entries(perms)
+          .map(
+            ([point, [ok, why]]) =>
+              `<tr>
+         <td><span class="k">${point}</span></td>
+         <td class="${ok ? "yes" : "no"}">${ok ? "可以" : "不可"}</td>
+         <td>${why}</td>
+       </tr>`,
+          )
+          .join("");
+      }
+
+      roleButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          roleButtons.forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+          renderPerms(btn.dataset.role);
+        });
+      });
+      renderPerms("student");
+
+      // ---------- 联动流程 ----------
+      const FLOW = [
+        {
+          title: "考试通过（权威：考试平台）",
+          desc: "考生完成考试并达到通过线，本平台产生 exam.passed。",
+          event: "exam.passed",
+        },
+        {
+          title: "工坊获得准入（权威：考试平台 → 工坊投影）",
+          desc: "维护「该生已通过准入考试」投影；报名时仍可回源查询。",
+          event: "exam.passed",
+        },
+        {
+          title: "发布招募（权威：工坊）",
+          desc: "项目成员为自己的项目发布招募，服务端校验「只有项目成员可以发布」。",
+          event: "project.created",
+        },
+        {
+          title: "学生报名（权威：工坊）",
+          desc: "报名写入工坊本地事务；重复报名由数据库部分唯一索引拦截。",
+          event: null,
+        },
+        {
+          title: "审批入队（权威：工坊）",
+          desc: "仅招募发布者可审批；通过后成员生效，产生 project.member_joined。",
+          event: "project.member_joined",
+        },
+      ];
+
+      const stepsEl = document.getElementById("steps");
+      let cursor = 0;
+
+      function renderSteps() {
+        stepsEl.innerHTML = FLOW.map(
+          (s, i) => `
+      <div class="step ${i < cursor ? "done" : ""}">
+        <div class="idx">${i + 1}</div>
+        <div class="body">
+          <div class="title">${s.title}</div>
+          <div class="desc">${s.desc}</div>
+          <div class="desc" style="margin-top:4px">
+            事件：${
+              s.event
+                ? `<span class="k">${s.event}</span>`
+                : "<span class='no'>无（同步接口）</span>"
+            }
+            ${i < cursor ? " · <span class='yes'>已执行</span>" : ""}
+          </div>
+        </div>
+      </div>`,
+        ).join("");
+      }
+
+      document.getElementById("next").addEventListener("click", () => {
+        if (cursor < FLOW.length) cursor += 1;
+        renderSteps();
+      });
+      document.getElementById("reset").addEventListener("click", () => {
+        cursor = 0;
+        renderSteps();
+      });
+      renderSteps();
+
+      // ---------- 事件封套 ----------
+      document.getElementById("envelope").textContent = JSON.stringify(
+        {
+          eventId: "evt_01JABCDEFGH",
+          eventType: "project.member_joined",
+          eventVersion: "1.0",
+          occurredAt: "2026-11-04T11:20:00Z",
+          sourcePlatform: "workshop",
+          sourceEntityId: "project_member_42",
+          actorId: "usr_tea_001",
+          correlationId: "flow_recruit_1001",
+          requestId: "req_5860286715a5a976fcdc",
+          data: {
+            projectId: 17,
+            userId: 3,
+            memberRole: "member",
+            status: "active",
+          },
+        },
+        null,
+        2,
+      );
+    </script>
+  </body>
+</html>

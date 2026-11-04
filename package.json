@@ -5,7 +5,16 @@
     "scripts": {
         "start": "./cmd dev",
         "build": "./cmd prod",
-        "version": "node ./version.js"
+        "version": "node ./version.js",
+        "dev": "./cmd dev",
+        "preview": "node scripts/preview.mjs",
+        "lint": "node scripts/lint-php.mjs",
+        "typecheck": "node scripts/contract-check.mjs",
+        "format": "prettier --write \"docs/platform/**/*.{md,yaml}\" \"demo/**/*.{html,md}\" \"scripts/**/*.mjs\"",
+        "format:check": "prettier --check \"docs/platform/**/*.{md,yaml}\" \"demo/**/*.{html,md}\" \"scripts/**/*.mjs\"",
+        "test": "node scripts/phpunit.mjs",
+        "test:contract": "node scripts/phpunit.mjs --filter PlatformContractTest",
+        "check": "npm run lint && npm run typecheck && npm run format:check && npm run test:contract"
     },
     "app": [
         {

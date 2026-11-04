@@ -1,0 +1,128 @@
+asyncapi: "2.6.0"
+info:
+  title: 实训工坊（DooTask）事件契约
+  version: 1.0.0
+  description: |
+    《五平台前端与功能联动约束规范》V2.0 §9.3 要求的事件封套与 §9.2 事件目录。
+
+    ## 本期实现状态（重要）
+    DooTask 侧**既不是生产者也不是消费者**：没有消息中间件、没有 outbox 表、
+    没有任何跨平台投递代码（见 `docs/platform/deviations.md` DV-11）。
+    本文件当前的作用是：把封套与事件目录**先定死**，待事件通道就绪后按此实现，
+    避免届时各平台各自造字段。
+
+    因此 `channels` 下的通道一律标注 `x-implemented: false`，
+    **不得**据此认为平台已具备事件能力。
+servers:
+  development:
+    url: 尚未提供
+    protocol: 待架构负责人确定
+    description: 事件代理/消息服务尚未选定（规范 §9.4 由架构负责人确定）
+
+defaultContentType: application/json
+
+channels:
+  project.created:
+    description: 工坊项目创建（规范 §9.2）
+    publish:
+      operationId: onProjectCreated
+      message: { $ref: "#/components/messages/ProjectCreated" }
+    x-implemented: false
+    x-note: 未实现。当前项目创建仅写库，不产生事件。
+  project.member_joined:
+    description: 成员加入项目（规范 §9.2）
+    publish:
+      operationId: onProjectMemberJoined
+      message: { $ref: "#/components/messages/EventEnvelope" }
+    x-implemented: false
+  project.milestone_submitted:
+    description: 里程碑提交（规范 §9.2）
+    publish:
+      operationId: onProjectMilestoneSubmitted
+      message: { $ref: "#/components/messages/EventEnvelope" }
+    x-implemented: false
+  project.accepted:
+    description: 项目验收通过（规范 §9.2）
+    publish:
+      operationId: onProjectAccepted
+      message: { $ref: "#/components/messages/EventEnvelope" }
+    x-implemented: false
+
+components:
+  messages:
+    EventEnvelope:
+      name: EventEnvelope
+      title: 统一事件封套
+      contentType: application/json
+      payload: { $ref: "#/components/schemas/EventEnvelope" }
+    ProjectCreated:
+      name: ProjectCreated
+      title: project.created
+      contentType: application/json
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/EventEnvelope"
+          - type: object
+            properties:
+              data: { $ref: "#/components/schemas/ProjectCreatedData" }
+
+  schemas:
+    EventEnvelope:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - eventVersion
+        - occurredAt
+        - sourcePlatform
+        - sourceEntityId
+        - data
+      properties:
+        eventId:
+          type: string
+          description: 全局唯一，形如 evt_01J...；消费方据此去重
+          example: evt_01JABCDEF
+        eventType:
+          type: string
+          enum:
+            - project.created
+            - project.member_joined
+            - project.milestone_submitted
+            - project.accepted
+        eventVersion:
+          type: string
+          description: 主版本.次版本；删字段/改类型/改必填性必须升主版本
+          example: "1.0"
+        occurredAt:
+          type: string
+          format: date-time
+          description: RFC 3339 带时区，服务端 UTC
+          example: "2026-11-03T10:00:00Z"
+        sourcePlatform:
+          type: string
+          enum: [forum, learning, exam, workshop, showcase]
+          description: 工坊固定为 workshop
+        sourceEntityId:
+          type: string
+          description: 触发事件的实体 ID（不一定是 projectId）
+        actorId:
+          type: string
+          description: 触发人；系统操作填 system
+        correlationId:
+          type: string
+          description: 完整业务流程串联 ID
+        requestId:
+          type: string
+          description: 单次请求串联 ID，与 HTTP 响应 requestId 一致
+        data:
+          type: object
+          additionalProperties: true
+          description: 事件载荷，只放消费方最小必要字段，不放整表快照
+    ProjectCreatedData:
+      type: object
+      required: [projectId]
+      properties:
+        projectId: { type: integer, description: DooTask 项目自增 ID（见 DV-13） }
+        title: { type: string }
+        ownerId: { type: integer, description: 项目负责人 userid }
+        status: { type: string, description: 项目状态，取值由工坊状态机维护 }

@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Route;
 /**
  * 接口
  */
-Route::prefix('api')->middleware(['webapi'])->group(function () {
+Route::prefix('api')->middleware(['webapi', 'platform.contract'])->group(function () {
     // 会员
     Route::any('users/{method}',                    UsersController::class);
     Route::any('users/{method}/{action}',           UsersController::class);

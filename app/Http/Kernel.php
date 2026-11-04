@@ -64,5 +64,8 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
 
         'webapi' => \App\Http\Middleware\WebApi::class,
+
+        // 五平台约束规范 V2.0 契约适配层（叠加式，不改语义）
+        'platform.contract' => \App\Http\Middleware\PlatformContract::class,
     ];
 }

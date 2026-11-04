@@ -1,0 +1,608 @@
+openapi: 3.0.3
+
+info:
+  title: 实训工坊（DooTask）平台 API
+  version: 1.0.0
+  description: |
+    《警院 WeChat 五平台统一开发与功能联动规范》V2.0 第 13 节要求的 OpenAPI 契约。
+
+    ## 与规范的两处已知偏离（详见 docs/platform/deviations.md）
+    1. **路径不是 REST 风格**：DooTask 采用 `/api/{module}/{method}[/{action}]` 的
+       方法分发模式，控制器由 `InvokeController::__invoke()` 动态派发，
+       `a/b` 实际调用 `a__b()`。规范 §8.1 要求的 `/api/v1/workshop/{resource}`
+       未落地，属已批准偏离（DV-02）。
+    2. **响应信封是叠加式**：既有的 `ret/msg/data` 原样保留（前端按 `ret` 判成败），
+       在其后追加规范要求的 `code` 与 `requestId`。因此本文件的响应 schema 同时
+       声明两组字段（DV-03）。
+
+    ## 通用约定
+    - 所有 `/api/**` 响应均带响应头 `X-Request-Id`，与响应体 `requestId` 一致。
+    - 请求头 `X-Request-Id`：8~128 位 `[A-Za-z0-9._:-]`，合法则沿用，否则服务端重新生成。
+    - 请求头 `X-App-Code`：仅接受 `forum` / `learning` / `exam` / `workshop` / `showcase`；
+      给出非法值返回 HTTP 400 + `VALIDATION_ERROR`（DV-04）。
+    - 认证：请求头 `token`（DooTask 既有方式）。未认证时**HTTP 200 + `ret:-1`**，
+      `code` 映射为 `AUTH_REQUIRED`（历史行为，见 DV-04）。
+    - 分页：`page`（从 1 开始）+ `pagesize`（服务端各自设上限，见各接口说明）。
+servers:
+  - url: http://127.0.0.1:2222
+    description: 本地开发（PHP 内置服务）
+
+tags:
+  - name: 认证
+    description: 登录、身份信息
+  - name: 项目
+    description: 项目与任务
+  - name: 招募
+    description: 项目大厅招募域
+  - name: 文件
+    description: 文件列表与上传
+  - name: 系统
+    description: 公共配置
+
+paths:
+  /api/users/login:
+    post:
+      tags: [认证]
+      summary: 账号密码登录
+      description: 成功后返回 `token`，后续请求置于请求头 `token`。
+      operationId: usersLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, description: 登录邮箱 }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: 登录结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/users/info:
+    get:
+      tags: [认证]
+      summary: 当前登录用户信息
+      operationId: usersInfo
+      security: [{ TokenAuth: [] }]
+      responses:
+        "200":
+          description: 用户信息；未认证时 `ret=-1`、`code=AUTH_REQUIRED`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/users/editdata:
+    post:
+      tags: [认证]
+      summary: 修改个人资料
+      operationId: usersEditdata
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname: { type: string }
+                profession: { type: string }
+                userimg: { type: string, description: 头像文件地址 }
+      responses:
+        "200":
+          description: 操作结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/users/search:
+    get:
+      tags: [认证]
+      summary: 按关键字搜索用户（用于邀请成员）
+      operationId: usersSearch
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - name: keys
+          in: query
+          schema: { type: string }
+          description: 昵称或邮箱关键字
+      responses:
+        "200":
+          description: 用户列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/system/setting:
+    get:
+      tags: [系统]
+      summary: 公共配置（注册开关、邀请策略等）
+      description: 无需认证，是当前唯一可匿名读取的业务配置接口。
+      operationId: systemSetting
+      responses:
+        "200":
+          description: 配置项
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/lists:
+    get:
+      tags: [项目]
+      summary: 我的项目列表
+      operationId: projectLists
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: archived
+          in: query
+          schema: { type: string, enum: [yes, no], default: no }
+          description: 是否包含已归档项目
+      responses:
+        "200":
+          description: 项目列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/one:
+    get:
+      tags: [项目]
+      summary: 项目详情
+      operationId: projectOne
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: 项目详情；非成员访问由服务端数据归属校验拒绝
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/add:
+    post:
+      tags: [项目]
+      summary: 新建项目
+      operationId: projectAdd
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                desc: { type: string }
+      responses:
+        "200":
+          description: 新建结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/update:
+    post:
+      tags: [项目]
+      summary: 更新项目
+      operationId: projectUpdate
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id]
+              properties:
+                project_id: { type: integer }
+                name: { type: string }
+                desc: { type: string }
+      responses:
+        "200":
+          description: 更新结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/user:
+    get:
+      tags: [项目]
+      summary: 项目成员列表
+      operationId: projectUser
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: 成员列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/task/lists:
+    get:
+      tags: [项目]
+      summary: 任务列表
+      operationId: projectTaskLists
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          schema: { type: integer }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 任务列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/task/add:
+    post:
+      tags: [项目]
+      summary: 新建任务
+      operationId: projectTaskAdd
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, name]
+              properties:
+                project_id: { type: integer }
+                name: { type: string }
+      responses:
+        "200":
+          description: 新建结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/project/task/update:
+    post:
+      tags: [项目]
+      summary: 更新任务（含状态流转）
+      description: 状态流转由服务端校验，非法流转返回 `ret<=0` 与 `BUSINESS_ERROR`。
+      operationId: projectTaskUpdate
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id]
+              properties:
+                task_id: { type: integer }
+                name: { type: string }
+                complete_at: { type: string, nullable: true }
+      responses:
+        "200":
+          description: 更新结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/lists:
+    get:
+      tags: [招募]
+      summary: 招募列表（项目大厅）
+      operationId: recruitmentLists
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 招募列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/one:
+    get:
+      tags: [招募]
+      summary: 招募详情
+      operationId: recruitmentOne
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - name: recruitment_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: 招募详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/add:
+    post:
+      tags: [招募]
+      summary: 发布招募
+      operationId: recruitmentAdd
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, title]
+              properties:
+                project_id: { type: integer }
+                title: { type: string }
+                content: { type: string }
+      responses:
+        "200":
+          description: 发布结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/apply:
+    post:
+      tags: [招募]
+      summary: 报名招募
+      description: 重复报名由数据库部分唯一索引拦截，返回 `ret<=0`。
+      operationId: recruitmentApply
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recruitment_id]
+              properties:
+                recruitment_id: { type: integer }
+                remark: { type: string }
+      responses:
+        "200":
+          description: 报名结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/review/apply:
+    post:
+      tags: [招募]
+      summary: 审批报名
+      description: 仅招募发布者可审批；越权返回 `ret<=0`，`code=BUSINESS_ERROR`。
+      operationId: recruitmentReviewApply
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [application_id, status]
+              properties:
+                application_id: { type: integer }
+                status: { type: string, enum: [approve, reject] }
+      responses:
+        "200":
+          description: 审批结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/member/add:
+    post:
+      tags: [招募]
+      summary: 直接添加成员
+      operationId: recruitmentMemberAdd
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recruitment_id, userid]
+              properties:
+                recruitment_id: { type: integer }
+                userid: { type: integer }
+      responses:
+        "200":
+          description: 添加结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/status:
+    post:
+      tags: [招募]
+      summary: 变更招募状态
+      description: 非法状态流转返回 `ret=-1`（DooTask 既有约定），见 DV-04。
+      operationId: recruitmentStatus
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recruitment_id, status]
+              properties:
+                recruitment_id: { type: integer }
+                status: { type: string, description: 目标状态，由招募状态机校验 }
+      responses:
+        "200":
+          description: 变更结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/recruitment/convert:
+    post:
+      tags: [招募]
+      summary: 招募转为正式项目
+      operationId: recruitmentConvert
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recruitment_id]
+              properties:
+                recruitment_id: { type: integer }
+      responses:
+        "200":
+          description: 转换结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/file/lists:
+    get:
+      tags: [文件]
+      summary: 文件列表
+      operationId: fileLists
+      security: [{ TokenAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: project_id
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: 文件列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/file/add:
+    post:
+      tags: [文件]
+      summary: 上传文件
+      description: |
+        按规范 §10.1，文件引用应包含 `fileId/fileName/contentType/sizeBytes/accessMode/downloadUrl`。
+        DooTask 现有返回字段为 `id/name/size/ext/url`，映射关系见
+        `docs/platform/data-dictionary-mapping.md`，本期**不改报文**（改动会破坏前端）。
+      operationId: fileAdd
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: string
+                  format: binary
+                project_id: { type: integer }
+      responses:
+        "200":
+          description: 上传结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: token
+      description: DooTask 既有会话令牌（非 OIDC Access Token，见 DV-01）
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 页码，从 1 开始
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pagesize
+      in: query
+      description: |
+        每页条数。规范 §8.2 要求默认 20、上限 100；DooTask 各接口上限由调用方
+        `Base::getPaginate()` 各自设定，本期未统一（DV-05）。超限不静默放大，
+        由服务端截断到该接口上限。
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    RequestId:
+      name: X-Request-Id
+      in: header
+      description: 8~128 位 `[A-Za-z0-9._:-]`；合法则沿用并回带，否则服务端重新生成
+      schema: { type: string, pattern: "^[A-Za-z0-9._:-]{8,128}$" }
+    AppCode:
+      name: X-App-Code
+      in: header
+      description: 五平台编码，非法值返回 400 + VALIDATION_ERROR
+      schema:
+        type: string
+        enum: [forum, learning, exam, workshop, showcase]
+
+  schemas:
+    Envelope:
+      type: object
+      description: |
+        叠加式信封：`ret/msg/data` 为 DooTask 既有字段（前端据此判成败），
+        `code/requestId` 为规范 §8.2 追加字段。两组字段同时存在，缺一不可丢弃。
+      required: [ret, msg, data, code, requestId]
+      properties:
+        ret:
+          type: integer
+          description: ">0 成功；0 业务失败；-1 未认证或业务拒绝（DooTask 既有约定）"
+        msg:
+          type: string
+          description: 人类可读提示，不用于程序判断
+        data:
+          description: 业务载荷；失败时为对象或空数组（与规范 §8.2 的 null 不同，DV-03）
+          nullable: true
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: {}
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        requestId:
+          type: string
+          description: 与响应头 X-Request-Id 一致
+      example:
+        ret: 1
+        msg: success
+        data: {}
+        code: OK
+        requestId: req_5860286715a5a976fcdc
+
+    ErrorCode:
+      type: string
+      description: 规范 §8.2 固定错误码集合（本期 9 个，未经审批不得新增，DV-08）
+      enum:
+        - OK
+        - VALIDATION_ERROR
+        - AUTH_REQUIRED
+        - AUTH_TOKEN_EXPIRED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT
+        - BUSINESS_ERROR
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_ERROR
