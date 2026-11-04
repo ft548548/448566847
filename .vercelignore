@@ -1,0 +1,43 @@
+# 上传到 Vercel 之前需要剔除的内容（vercel-php 的部署包会把仓库根目录整体上传）
+# 规则同 .gitignore：前导 / 表示仓库根，! 表示例外。
+
+# 依赖：composer 依赖由运行时在构建期安装，本地 vendor 是 Windows/PHP 8.0 产物，不上传
+/vendor
+
+# 前端构建依赖与源码（构建产物已在 public/js、public/css 中）
+/node_modules
+/resources/assets
+
+# 容器与编排（Vercel 不用，且体积 11MB）
+/docker
+/docker-compose.yml
+/.dockerignore
+
+# 版本库与 CI
+/.git
+/.github
+/.gitignore
+
+# 密钥：绝不能上传（Vercel 用项目环境变量注入）
+/.env
+/.env.docker
+/.env.example
+
+# 运行期数据与日志
+/storage/logs
+/storage/framework/cache
+/storage/framework/sessions
+/storage/framework/views
+/public/uploads
+/bootstrap/cache
+
+# 测试与本地脚本
+/tests
+/phpunit.xml
+/deploy
+/scripts
+
+# 文档与演示（不影响运行时，减小部署包）
+/docs
+/demo
+/cache

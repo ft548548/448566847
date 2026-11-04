@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["hkg1"],
+  "installCommand": "node -e \"console.log('[vercel] skip npm install: PHP deps are installed by the vercel-php runtime')\"",
+  "buildCommand": "node -e \"console.log('[vercel] skip npm build: repo build script is docker-based and must not run here')\"",
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.4.5",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    { "src": "/(js|css|images|fonts|sound|avatars)/(.*)", "dest": "/public/$1/$2" },
+    { "src": "/(favicon\\.ico|robots\\.txt|manifest\\.json)", "dest": "/public/$1" },
+    { "src": "/api/(.*)", "dest": "/api/index.php" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/api/index.php" }
+  ]
+}

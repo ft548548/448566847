@@ -20,6 +20,7 @@
 | 网络矩阵             | `docs/platform/network-matrix.md`          | 实际拓扑 + 生产目标 + 缺口清单                                                      |
 | 日志说明             | `docs/platform/logging.md`                 | 字段定义与排查流程                                                                  |
 | 偏离登记             | `docs/platform/deviations.md`              | 14 条偏离，逐条写清理由与补偿                                                       |
+| Vercel 部署          | `docs/platform/deployment-vercel.md`       | 受限部署：入口、环境变量、验收清单与 7 项能力失效说明                               |
 | 离线 Demo            | `demo/index.html`                          | 单文件零网络，三角色权限差异 + 一条联动流程                                         |
 
 ## 2 常用命令
@@ -98,6 +99,9 @@ npm run typecheck
 
 # 6) 中间件单元/功能测试
 PHP_BIN=D:/dt-run/php/php.exe npm run test
+
+# 7) Vercel 部署后验收（逐项打印通过/失败）
+bash deploy/vercel/verify.sh https://your-project.vercel.app
 ```
 
 ## 6 责任与待确认
