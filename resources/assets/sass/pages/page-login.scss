@@ -1,0 +1,143 @@
+.page-login {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #F3F6FE;
+    .login-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 32px 0;
+        width: 100%;
+        max-height: 100%;
+        overflow: auto;
+        .login-logo {
+            flex-shrink: 0;
+            width: 68px;
+            height: 68px;
+            background: url("../images/logo.svg") no-repeat center center;
+            background-size: contain;
+            &.can-click {
+                cursor: pointer;
+            }
+        }
+        .login-box {
+            margin-top: 32px;
+            width: 400px;
+            border-radius: 12px;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px #e6ecfa;
+            .login-title {
+                font-size: 24px;
+                font-weight: 600;
+                text-align: center;
+                margin-top: 36px;
+            }
+            .login-subtitle {
+                font-size: 14px;
+                text-align: center;
+                margin-top: 12px;
+                padding: 0 12px;
+                color: #AAAAAA;
+            }
+            .login-input {
+                margin: 32px 40px;
+                > * {
+                    margin-top: 26px;
+                }
+                .ivu-input {
+                    border-color: #f1f1f1;
+                    &[readonly="readonly"] {
+                        background-color: #f5f5f5;
+                    }
+                }
+                .ivu-input-large {
+                    font-size: 15px;
+                }
+                .login-code {
+                    .ivu-input-group-prepend,
+                    .ivu-input-group-append {
+                        font-size: 14px;
+                        background: transparent;
+                        border-color: #f1f1f1;
+                    }
+                    .ivu-input {
+                        border-left-color: transparent;
+                    }
+                    .login-code-end {
+                        margin: -6px -7px;
+                        height: 38px;
+                        overflow: hidden;
+                        cursor: pointer;
+                        img {
+                            height: 100%;
+                        }
+                    }
+                }
+                .login-switch {
+                    color: #aaaaaa;
+                }
+                .login-input-tips-box{
+                    position: relative;
+                    .login-input-tips{
+                        font-size: 12px;
+                        position: absolute;
+                        left: 0;
+                        bottom: -20px;
+                        color: #c7c7c7;
+                    }
+                }
+                > .ivu-poptip {
+                    width: 100%;
+                    > .ivu-poptip-rel {
+                        width: 100%;
+                    }
+                }
+            }
+        }
+        .login-bottom {
+            margin-top: 18px;
+            display: flex;
+            align-items: center;
+            width: 388px;
+            .login-setting {
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+                color: #666666;
+                .taskfont {
+                    margin-top: 1px;
+                    margin-left: 3px;
+                    transform: scale(0.8);
+                    font-size: 12px;
+                }
+            }
+            .login-setting-menu {
+                display: flex;
+                flex-direction: column;
+            }
+            .login-setting-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                .ivu-icon {
+                    color: #666666;
+                    padding-left: 6px;
+                    margin-right: -6px;
+                }
+            }
+            .login-forgot {
+                flex: 1;
+                padding-left: 24px;
+                color: #aaaaaa;
+                text-align: right;
+            }
+        }
+    }
+}
