@@ -77,15 +77,39 @@ apt install -y nginx mariadb-server redis-server
 
 ### 4.2 RHEL / CentOS / Alibaba Cloud Linux 3
 
+> **重要**：Alibaba Cloud Linux 3 的 `anolis-release` 不提供 `system-release(releasever)`，
+> 直接安装 `remi-release-8.rpm` 会报 "nothing provides system-release(releasever) = 8"。
+> 正确做法是手写 remi-safe 仓库（指向阿里云镜像），使用 **SCL 形式的 php80-php-\* 包**
+> （装于 `/opt/remi/php80`，配置在 `/etc/opt/remi/php80`，不影响系统自带 PHP 7.4）：
+
 ```bash
-dnf install -y epel-release
-dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm
-dnf module reset php -y
-dnf module enable php:remi-8.0 -y
-dnf install -y php-fpm php-cli php-mysqlnd php-mbstring php-xml php-curl \
-               php-gd php-zip php-bcmath php-intl
+# 1) 手写 Remi Safe 源（阿里云镜像）
+cat > /etc/yum.repos.d/remi-safe.repo <<'EOF'
+[remi-safe]
+name=Remi Safe RPM repository for Enterprise Linux 8 - x86_64
+baseurl=https://mirrors.aliyun.com/remi/enterprise/8/safe/x86_64/
+enabled=1
+gpgcheck=0
+EOF
+
+# 2) 安装 PHP 8.0（SCL）与周边服务
+dnf install -y \
+  php80-php-cli php80-php-fpm php80-php-common php80-php-mysqlnd \
+  php80-php-mbstring php80-php-xml php80-php-gd php80-php-pecl-zip \
+  php80-php-bcmath php80-php-intl php80-php-process php80-php-opcache \
+  php80-php-pdo
 dnf install -y nginx mariadb-server redis
+
+# 3) php.ini 在 /etc/opt/remi/php80/php.ini，调整时区/上传/内存后改 fpm 池：
+#    /etc/opt/remi/php80/php-fpm.d/www.conf
+#      user = nginx / group = nginx
+#      listen = /var/opt/remi/php80/run/php-fpm/www.sock
+#      listen.owner = nginx / listen.group = nginx / listen.mode = 0660
+#      listen.acl_users = nginx     ← Remi 默认是 apache,nginx，必须改为仅 nginx，
+#                                      否则 nginx 连 socket 报 Permission denied（502）
 ```
+
+> PHP 二进制：`/opt/remi/php80/root/usr/bin/php`；服务名：`php80-php-fpm`。
 
 ### 4.3 已有宝塔面板
 
@@ -97,7 +121,7 @@ php-fpm 监听一般是 `unix:/tmp/php-cgi-80.sock`（以 `ss -lx | grep php` �
 
 ```bash
 systemctl enable --now nginx php8.0-fpm mariadb redis     # Debian 系
-systemctl enable --now nginx php-fpm mariadb redis        # RHEL 系（服务名为 php-fpm）
+systemctl enable --now nginx php80-php-fpm mariadb redis  # RHEL 系（Remi SCL 服务名）
 ```
 
 ---
