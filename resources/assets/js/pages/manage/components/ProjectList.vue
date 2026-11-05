@@ -59,6 +59,9 @@
                                 <EDropdownItem command="deleted_task">{{$L('已删除任务')}}</EDropdownItem>
                                 <EDropdownItem command="transfer" divided>{{$L('移交项目')}}</EDropdownItem>
                                 <EDropdownItem command="archived">{{$L('归档项目')}}</EDropdownItem>
+                                <EDropdownItem command="submit" :disabled="projectData.archived_at == null" :divided="projectData.submitted_at != null">
+                                    {{ projectData.submitted_at != null ? $L('已提交') : $L('提交项目') }}
+                                </EDropdownItem>
                                 <EDropdownItem command="delete" style="color:#f40">{{$L('删除项目')}}</EDropdownItem>
                             </EDropdownMenu>
                             <EDropdownMenu v-else slot="dropdown">
@@ -1143,6 +1146,35 @@ export default {
             });
         },
 
+        onSubmit() {
+            if (this.projectData.archived_at == null) {
+                $A.modalWarning({
+                    content: '仅状态为"已完成"的项目允许提交，请先完成并归档项目后再提交。'
+                });
+                return;
+            }
+            if (this.projectData.submitted_at) {
+                $A.modalWarning({
+                    content: '该项目已提交，请勿重复提交。'
+                });
+                return;
+            }
+            $A.modalConfirm({
+                title: '提交项目',
+                content: '你确定要提交已完成的项目【' + this.projectData.name + '】吗？',
+                loading: true,
+                onOk: () => {
+                    this.$store.dispatch("submitProject", this.projectId).then(({msg}) => {
+                        $A.messageSuccess(msg);
+                        this.$Modal.remove();
+                    }).catch(({msg}) => {
+                        $A.modalError(msg, 301);
+                        this.$Modal.remove();
+                    });
+                }
+            });
+        },
+
         onDelete() {
             $A.modalConfirm({
                 title: '删除项目',
@@ -1237,6 +1269,10 @@ export default {
 
                 case "exit":
                     this.onExit();
+                    break;
+
+                case "submit":
+                    this.onSubmit();
                     break;
             }
         },

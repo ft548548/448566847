@@ -744,6 +744,33 @@ export default {
     },
 
     /**
+     * 提交项目（仅已完成/已归档的项目允许提交）
+     * @param state
+     * @param dispatch
+     * @param project_id
+     */
+    submitProject({state, dispatch}, project_id) {
+        return new Promise(function (resolve, reject) {
+            if ($A.runNum(project_id) === 0) {
+                reject({msg: 'Parameter error'});
+                return;
+            }
+            dispatch("call", {
+                url: 'project/submit',
+                data: {
+                    project_id,
+                },
+            }).then(result => {
+                dispatch("getProjectOne", project_id).catch(() => {})
+                resolve(result)
+            }).catch(e => {
+                console.warn(e);
+                reject(e)
+            });
+        });
+    },
+
+    /**
      * 删除项目
      * @param state
      * @param dispatch

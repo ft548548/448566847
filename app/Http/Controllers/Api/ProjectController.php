@@ -692,6 +692,44 @@ class ProjectController extends AbstractController
     }
 
     /**
+     * @api {get} api/project/submit          12.1 提交项目
+     *
+     * @apiDescription 需要token身份（限：项目负责人），仅已完成（已归档）的项目允许提交
+     * @apiVersion 1.0.0
+     * @apiGroup project
+     * @apiName submit
+     *
+     * @apiParam {Number} project_id            项目ID
+     *
+     * @apiSuccess {Number} ret     返回状态码（1正确、0错误）
+     * @apiSuccess {String} msg     返回信息（错误描述）
+     * @apiSuccess {Object} data    返回数据（id、submitted_at）
+     */
+    public function submit()
+    {
+        $user = User::auth();
+        //
+        $project_id = intval(Request::input('project_id'));
+        //
+        $project = Project::userProject($project_id, null, true);
+        //
+        if ($project->archived_at == null) {
+            throw new ApiException('项目尚未完成（未归档），不能提交', ['project_id' => $project_id], -4002);
+        }
+        //
+        if (!empty($project->submitted_at)) {
+            throw new ApiException('项目已提交，请勿重复提交', ['project_id' => $project_id], -4001);
+        }
+        //
+        $project->submitProject();
+        return Base::retSuccess('提交成功', [
+            'id' => $project->id,
+            'submitted_at' => $project->submitted_at,
+            'submitted_userid' => $user->userid,
+        ]);
+    }
+
+    /**
      * @api {get} api/project/remove          13. 删除项目
      *
      * @apiDescription 需要token身份（限：项目负责人）

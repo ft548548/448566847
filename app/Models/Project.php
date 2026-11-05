@@ -21,6 +21,8 @@ use Request;
  * @property int|null $dialog_id 聊天会话ID
  * @property string|null $archived_at 归档时间
  * @property int|null $archived_userid 归档会员
+ * @property string|null $submitted_at 提交时间（仅已完成/已归档项目可提交）
+ * @property int|null $submitted_userid 提交会员
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property \Illuminate\Support\Carbon|null $deleted_at
@@ -39,6 +41,8 @@ use Request;
  * @method static \Illuminate\Database\Eloquent\Builder|Project query()
  * @method static \Illuminate\Database\Eloquent\Builder|Project whereArchivedAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|Project whereArchivedUserid($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|Project whereSubmittedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|Project whereSubmittedUserid($value)
  * @method static \Illuminate\Database\Eloquent\Builder|Project whereCreatedAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|Project whereDeletedAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|Project whereDesc($value)
@@ -260,6 +264,21 @@ class Project extends AbstractModel
                     'archived_follow' => 1
                 ]);
             }
+            $this->save();
+        });
+        return true;
+    }
+
+    /**
+     * 提交项目（仅已完成/已归档的项目允许提交）
+     * @return bool
+     */
+    public function submitProject()
+    {
+        AbstractModel::transaction(function () {
+            $this->submitted_at = Carbon::now();
+            $this->submitted_userid = User::userid();
+            $this->addLog("提交项目");
             $this->save();
         });
         return true;

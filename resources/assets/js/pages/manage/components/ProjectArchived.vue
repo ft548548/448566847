@@ -151,9 +151,21 @@ export default {
                     }
                 },
                 {
+                    title: this.$L('提交状态'),
+                    key: 'submitted_at',
+                    width: 110,
+                    render: (h, {row}) => {
+                        return h('Tag', {
+                            props: {
+                                color: row.submitted_at ? 'primary' : 'default'
+                            }
+                        }, row.submitted_at ? this.$L('已提交') : this.$L('未提交'));
+                    }
+                },
+                {
                     title: this.$L('操作'),
                     align: 'center',
-                    width: 100,
+                    width: 140,
                     render: (h, params) => {
                         const vNode = [
                             h('Poptip', {
@@ -174,9 +186,11 @@ export default {
                                     }
                                 },
                             }, this.$L('还原')),
-                            h('Poptip', {
+                        ];
+                        if (!params.row.submitted_at) {
+                            vNode.push(h('Poptip', {
                                 props: {
-                                    title: this.$L('你确定要删除项目吗？'),
+                                    title: this.$L('你确定要提交该项目吗？'),
                                     confirm: true,
                                     transfer: true,
                                     placement: 'left',
@@ -185,15 +199,34 @@ export default {
                                     marginLeft: '8px',
                                     fontSize: '13px',
                                     cursor: 'pointer',
-                                    color: '#f00',
+                                    color: '#1d4e89',
                                 },
                                 on: {
                                     'on-ok': () => {
-                                        this.delete(params.row);
+                                        this.submit(params.row);
                                     }
                                 },
-                            }, this.$L('删除'))
-                        ];
+                            }, this.$L('提交')));
+                        }
+                        vNode.push(h('Poptip', {
+                            props: {
+                                title: this.$L('你确定要删除项目吗？'),
+                                confirm: true,
+                                transfer: true,
+                                placement: 'left',
+                            },
+                            style: {
+                                marginLeft: '8px',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                color: '#f00',
+                            },
+                            on: {
+                                'on-ok': () => {
+                                    this.delete(params.row);
+                                }
+                            },
+                        }, this.$L('删除')))
                         return h('TableAction', {
                             props: {
                                 column: params.column
@@ -256,6 +289,19 @@ export default {
                 this.loadIng--;
                 this.getLists();
                 this.$store.dispatch("getProjectOne", row.id).catch(() => {});
+            }).catch(({msg}) => {
+                $A.modalError(msg);
+                this.loadIng--;
+                this.getLists();
+            })
+        },
+
+        submit(row) {
+            this.loadIng++;
+            this.$store.dispatch("submitProject", row.id).then(({msg}) => {
+                $A.messageSuccess(msg);
+                this.loadIng--;
+                this.getLists();
             }).catch(({msg}) => {
                 $A.modalError(msg);
                 this.loadIng--;
