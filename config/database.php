@@ -126,8 +126,14 @@ return [
             'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
         ],
 
+        // 说明：predis 1.x 不解析配置数组里的 url 键（只有字符串 URL 才解析），
+        // Laravel 传给 predis 的是数组，所以 REDIS_URL 单给一个值会静默回落到
+        // 127.0.0.1。托管 Redis（Upstash 等）请改用 host/port/password/scheme 四项：
+        //   REDIS_SCHEME=tls        # tcp（默认）| tls
+        //   REDIS_SSL_VERIFY=false  # 运行时缺 CA 包时置 false
         'default' => [
-            'url' => env('REDIS_URL'),
+            'scheme' => env('REDIS_SCHEME', 'tcp'),
+            'ssl' => ['verify_peer' => filter_var(env('REDIS_SSL_VERIFY', 'true'), FILTER_VALIDATE_BOOLEAN)],
             'host' => env('REDIS_HOST', '127.0.0.1'),
             'password' => env('REDIS_PASSWORD', null),
             'port' => env('REDIS_PORT', '6379'),
@@ -135,7 +141,8 @@ return [
         ],
 
         'cache' => [
-            'url' => env('REDIS_URL'),
+            'scheme' => env('REDIS_SCHEME', 'tcp'),
+            'ssl' => ['verify_peer' => filter_var(env('REDIS_SSL_VERIFY', 'true'), FILTER_VALIDATE_BOOLEAN)],
             'host' => env('REDIS_HOST', '127.0.0.1'),
             'password' => env('REDIS_PASSWORD', null),
             'port' => env('REDIS_PORT', '6379'),

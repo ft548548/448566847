@@ -26,3 +26,20 @@ laravels-timer-process.pid
 vars.yaml
 laravels.conf
 laravels.pid
+
+.vercel
+
+# Vercel 部署用的本地环境变量（含云库口令，绝不入库）
+deploy/vercel/env.vercel.local
+dootask-cloud.sql
+
+.vercel
+.env*
+
+# Vercel CLI 生成的本地 OIDC 令牌，不入库、不上传
+.env.local
+
+# 部署打包产物（体积大，由 pack.sh 现场生成）
+deploy/aliyun/*.tar.gz
+deploy/aliyun/*.zip
+/dist/*.zip

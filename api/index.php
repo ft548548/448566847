@@ -49,18 +49,39 @@ $_SERVER['PHP_SELF'] = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $root . '/public/index.php';
 unset($_SERVER['PATH_INFO'], $_SERVER['ORIG_PATH_INFO']);
 
+// 3) 运行期缓存写入点全部指向 /tmp。
+//    Laravel 8 支持用环境变量覆盖这些路径（Application::normalizeCachePath），
+//    因此既不用改框架，也不必调用 Laravel 9 才有的 useBootstrapPath()。
+//    必须放在 require bootstrap/app.php 之前：Application 构造时就要读 APP_PACKAGES_CACHE
+//    决定 PackageManifest 的落盘位置，ProviderRepository 则读 APP_SERVICES_CACHE。
+//    指向只读的 bootstrap/cache 会写盘失败——Laravel 把 warning 转成 ErrorException。
+$cachePath = $storagePath . '/bootstrap/cache';
+$ensure($cachePath);
+foreach ([
+    'APP_PACKAGES_CACHE' => $cachePath . '/packages.php',
+    'APP_SERVICES_CACHE' => $cachePath . '/services.php',
+    'APP_CONFIG_CACHE' => $cachePath . '/config.php',
+    'APP_ROUTES_CACHE' => $cachePath . '/routes-v7.php',
+    'APP_EVENTS_CACHE' => $cachePath . '/events.php',
+] as $envKey => $envValue) {
+    if (getenv($envKey) === false || getenv($envKey) === '') {
+        putenv($envKey . '=' . $envValue);
+        $_ENV[$envKey] = $envValue;
+        $_SERVER[$envKey] = $envValue;
+    }
+}
+
 /** @var \Illuminate\Foundation\Application $app */
 $app = require_once $root . '/bootstrap/app.php';
 
-// 3) storage 重定向到 /tmp，否则写日志/会话/编译视图会报只读错误
-$app->useStoragePath($storagePath);
-
-// 4) 包清单缓存：构建期若已生成 packages.php 就沿用（省一次 vendor 扫描），
-//    否则回落到 /tmp，避免运行期往只读的 bootstrap/cache 里写文件。
-if (!is_file($root . '/bootstrap/cache/packages.php')) {
-    $ensure($storagePath . '/bootstrap/cache');
-    $app->useBootstrapPath($storagePath . '/bootstrap');
+// 3.2) 本机（Windows）调试时 storage 可能是盘符路径，Laravel 只把 / 与 \ 视作绝对前缀，
+//      不加这一步会把 D:/... 当成相对路径拼到项目根下。线上是 /tmp，不触发。
+if (preg_match('#^[A-Za-z]:[\\\\/]#', $storagePath)) {
+    $app->addAbsoluteCachePathPrefix(substr($storagePath, 0, 2));
 }
+
+// 3.5) storage 重定向到 /tmp，否则写日志/会话/编译视图会报只读错误
+$app->useStoragePath($storagePath);
 
 $kernel = $app->make(Kernel::class);
 

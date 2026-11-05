@@ -24,6 +24,22 @@ DooTask 是**常驻进程形态**的 Laravel 应用，Vercel 是**函数形态**
 
 > 官方态度也要如实告知：`vercel-php` 是**社区维护的第三方运行时**，Vercel 官方不支持它，并在其 README 中建议新项目改用容器方式部署 PHP。详见 <https://github.com/vercel-community/php>。
 
+### 0.1 部署配置速查（逐项对应 Dashboard 字段）
+
+| 项目           | 值                                            | 依据                                                                                     |
+| -------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 项目类型       | PHP / Laravel 8 应用（非前端静态站）          | `composer.json` 要求 php ^8.0 + laravel/framework ^8.48；无 Next/Nuxt 产物               |
+| Framework 预设 | **Other**（不能选 Node.js / Next.js）         | 选错会注入 `npm run build`，触发仓库里 docker 化的 `./cmd prod` 而失败                   |
+| 构建命令       | **空**（`vercel.json` 覆盖为 no-op）          | 真正的构建由 `vercel-php` 运行时完成：composer 装依赖 + 打包函数                         |
+| 输出目录       | **空**                                        | 没有静态产物目录；页面由 `api/index.php` 这个函数动态渲染                                |
+| 安装命令       | **空**                                        | 前台 `npm install` 要装 427MB 且对 PHP 无用                                              |
+| 函数入口       | `api/index.php`                               | 在 `vercel.json` 的 `functions` 中声明，路由兜底到它                                     |
+| 运行时         | `vercel-php@0.4.5`（PHP 8.0，Amazon Linux 2） | 与 `composer.json` 的 `^8.0` 对齐；更高版本运行时未验证                                  |
+| 区域           | `hkg1`                                        | 与云库同区或就近，跨洋每次查询多 200ms                                                   |
+| 函数规格       | 1024MB / 60s                                  | 够 Laravel 启动 + 68MB autoload；Hobby 上限 300s                                         |
+| 部署包体积     | 约 33MB（源码），依赖在云端安装               | `.vercelignore` 排除 vendor 68MB、node_modules 427MB、resources/assets 24MB、docker 11MB |
+| 依赖安装       | 云端 composer 安装，不装 npm                  | 本地 `vendor/` 是 Windows/PHP 8.0 产物，不能上传                                         |
+
 ---
 
 ## 1. 部署前置条件
@@ -71,9 +87,9 @@ php artisan key:generate --show     # 输出 base64:xxxxx，填入 Vercel 环境
     }
   },
   "routes": [
-    { "src": "/(js|css|images|fonts|sound|avatars)/(.*)", "dest": "/public/$1/$2" },
-    { "src": "/(favicon\\.ico|robots\\.txt|manifest\\.json)", "dest": "/public/$1" },
     { "src": "/api/(.*)", "dest": "/api/index.php" },
+    { "src": "/[^/]*\\.php$", "dest": "/api/index.php" },
+    { "src": "/", "dest": "/api/index.php" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/api/index.php" }
   ]
@@ -84,20 +100,32 @@ php artisan key:generate --show     # 输出 base64:xxxxx，填入 Vercel 环境
 
 1. **`installCommand` / `buildCommand` 必须改成空操作**。仓库 `package.json` 的 `build` 是 `./cmd prod`（docker compose 编排），Vercel 若按 Node 项目自动执行会直接失败。依赖安装交给 PHP 运行时自己跑 composer。
 2. **`runtime` 选 `vercel-php@0.4.5`（PHP 8.0.x）**，与 `composer.json` 的 `"php": "^8.0"` 和本地已验证的 8.0.30 对齐。可选项：`0.5.5`→PHP 8.1、`0.6.2`→8.2。**注意 PHP 8.0 已停止安全支持**，若要升到 8.1/8.2，只需改这一个字符串并在本地跑一遍全量测试。
-3. **静态资源必须显式改写**。DooTask 的 web 根是 `public/`，而 Vercel 以仓库根为根，直接访问 `/js/app.js` 会 404。前两条 route 负责把 `/js/*`、`/css/*` 映射到 `/public/*`。
-4. **最后一条是前端控制器兜底**，让所有非静态、非 `/api` 的请求（SPA 路由、邀请链接等）都进 Laravel。
+3. **不要给 `/js/*`、`/css/*` 加改写**。`vercel-php` 把静态根设为 `public/`，`/js/app.js` 天然就落到 `public/js/app.js`。早期版本误加了 `dest: /public/$1/$2`，等于多套一层变成 `public/public/js/app.js`，结果所有静态资源都掉进函数兜底返回 500。
+4. **`/` 与 `*.php` 必须抢在 filesystem 之前送进函数**。静态根是 `public/`，意味着 `/` 会被解析成 `public/index.php` 并**当静态文件原样吐出**——响应头是 `Content-Type: application/x-httpd-php`，等于公开 PHP 源码。`/[^/]*\.php$` 同理拦下 `/index.php`。这两条不是可选项。
+5. **最后一条是前端控制器兜底**，让所有非静态、非 `/api` 的请求（SPA 路由、邀请链接等）都进 Laravel。
 
 ### 2.2 `api/index.php`（Vercel 专用入口，不影响 `public/index.php`）
 
-这个入口解决三个只有 Serverless 才会遇到的问题：
+这个入口解决四个只有 Serverless 才会遇到的问题：
 
-| 问题                                            | 处理                                                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 运行期文件系统只读                              | `$app->useStoragePath('/tmp/dootask-storage')`，并预先建好 `framework/{cache,sessions,views}`、`logs`、`app/public` |
-| `bootstrap/cache` 只读                          | 构建期若已生成 `bootstrap/cache/packages.php` 就沿用；否则回落到 `/tmp/dootask-storage/bootstrap`                   |
-| `PATH_INFO` 污染导致 `/api/*` 全部落到 SPA 兜底 | 把 `SCRIPT_NAME`/`PHP_SELF` 归一为 `/index.php` 并清掉 `PATH_INFO`                                                  |
+| 问题                                            | 处理                                                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 运行期文件系统只读                              | `$app->useStoragePath('/tmp/dootask-storage')`，并预先建好 `framework/{cache,sessions,views}`、`logs`、`app/public`             |
+| `bootstrap/cache` 只读                          | 用 `APP_PACKAGES_CACHE` / `APP_SERVICES_CACHE` 等环境变量把落盘位置指向 `/tmp`，**必须在 `require bootstrap/app.php` 之前写入** |
+| `PATH_INFO` 污染导致 `/api/*` 全部落到 SPA 兜底 | 把 `SCRIPT_NAME`/`PHP_SELF` 归一为 `/index.php` 并清掉 `PATH_INFO`                                                              |
+| Windows 上盘符路径不被认作绝对路径              | `$app->addAbsoluteCachePathPrefix('D:')`，仅在 `preg_match('#^[A-Za-z]:[\\\\/]#')` 命中时执行，线上走 `/tmp` 不触发             |
 
-第三条是**实际踩到的坑**，值得单独说：以 router 脚本方式执行时，PHP 会把 `PHP_SELF` 写成 `/api/index.php/system/setting`、`PATH_INFO` 写成 `/system/setting`，Symfony 据此把 `/api` 当作 baseUrl 剥掉，于是 `/api/system/setting` 被当成 `/{method}/{action}` 命中 SPA 兜底路由——**返回 200 和一段 HTML，而不是 JSON**。这种"看起来成功、其实进错路由"的故障最难排查，已在入口里修掉，改动入口时不要删这段。
+**不要用 `Application::useBootstrapPath()`**：那是 Laravel 9 才有的方法，本仓库是 8.48，调用会直接 `Call to undefined method`（本地无法复现，因为本地有可写目录、走不到那个分支）。
+
+`PATH_INFO` 那一条是**实际踩到的坑**，值得单独说：以 router 脚本方式执行时，PHP 会把 `PHP_SELF` 写成 `/api/index.php/system/setting`、`PATH_INFO` 写成 `/system/setting`，Symfony 据此把 `/api` 当作 baseUrl 剥掉，于是 `/api/system/setting` 被当成 `/{method}/{action}` 命中 SPA 兜底路由——**返回 200 和一段 HTML，而不是 JSON**。这种"看起来成功、其实进错路由"的故障最难排查，已在入口里修掉，改动入口时不要删这段。
+
+### 2.2.1 运行时助手函数不能挂在 `autoload-dev`
+
+`asset_main()` 定义在 `app/Helpers/Function.php`，`main.blade.php` 渲染时就会调用。
+
+它在 `composer.json` 里原本写在 **`autoload-dev.files`** 下，而 `vercel-php` 构建期执行的是 `composer install --no-dev`，这个文件因此不会被自动加载，线上表现为首页 500：`Illuminate\View\ViewException: Call to undefined function asset_main()`。
+
+已把该文件移到 `autoload.files`（运行时必需的东西不属于 dev）。改 `autoload` 不会让 `composer.lock` 的 `content-hash` 失效，无需重新锁版本。
 
 ### 2.3 `api/php.ini`
 
@@ -125,8 +153,17 @@ php artisan key:generate --show     # 输出 base64:xxxxx，填入 Vercel 环境
 | `APP_ENV` / `APP_DEBUG` / `APP_URL`                           | `production` / `false` / 你的 Vercel 域名      |
 | `APP_STORAGE_PATH`                                            | 建议显式写 `/tmp/dootask-storage`              |
 | `DB_HOST` `DB_PORT` `DB_DATABASE` `DB_USERNAME` `DB_PASSWORD` | 云端 MySQL                                     |
-| `REDIS_HOST` `REDIS_PORT` `REDIS_PASSWORD` `REDIS_DB`         | 云端 Redis                                     |
+| `DB_PREFIX`                                                   | 与本地一致（本项目为 `pre_`），漏配会"表不存在" |
+| `MYSQL_ATTR_SSL_CA`                                           | TiDB 强制 TLS，填 CA 路径（见下）              |
+| `REDIS_HOST` `REDIS_PORT` `REDIS_PASSWORD`                    | 云端 Redis（`REDIS_URL` 对 predis 无效）       |
+| `REDIS_SCHEME=tls` `REDIS_DB=0` `REDIS_CACHE_DB=0`            | 托管 Redis 必配，见 7.6                        |
 | `PLATFORM_CONTRACT_ENABLED`                                   | `true`，启用契约适配层（`code` + `requestId`） |
+
+`MYSQL_ATTR_SSL_CA` 在 vercel-php（Amazon Linux 系）运行时通常填系统根证书包：
+
+```
+MYSQL_ATTR_SSL_CA=/etc/pki/tls/certs/ca-bundle.crt
+```
 
 **强烈建议**
 
@@ -171,19 +208,37 @@ vercel env add DB_HOST production
 
 ### 5.0 先把数据库准备好（否则部署成功但接口全 500）
 
-Vercel 不提供数据库，`/api/*` 的第一件事就是查库。所以先在云库建表并导数据：
+Vercel 不提供数据库，`/api/*` 的第一件事就是查库。两条免费路径的完整开通步骤见
+`deploy/vercel/provision-cloud-db.md`（TiDB Cloud Starter + Upstash，含 TLS 要求与额度限制）。
+
+建好库后导数据：
 
 ```bash
 # 1) 本地导出（结构 + 数据；--schema-only 只导结构）
 bash deploy/vercel/dump-for-cloud.sh
 
 # 2) 导入云库
-mysql -h <云库host> -P <端口> -u <用户> -p <库名> < dootask-cloud.sql
+mysql -h <云库host> -P <端口> -u <用户> -p --ssl-mode=REQUIRED <库名> < dootask-cloud.sql
 ```
 
 脚本会自动做两项兼容性预检：MariaDB 10.5+ 文件头那行 `/*!999999 enable the sandbox mode */` 会被过滤（否则 MySQL 8 / TiDB 直接报语法错）；同时提示是否含外键（PlanetScale 不支持外键，含外键请改用 TiDB Cloud 或 RDS）。
 
 导完在云库执行 `SELECT COUNT(*) FROM pre_users;` 确认非 0，再继续下一步。
+
+> **云库的 TLS 不是可选项。** TiDB 公网端点强制 TLS，`MYSQL_ATTR_SSL_CA` 必须填 CA **文件路径**
+> （`/etc/pki/tls/certs/ca-bundle.crt`），填 `true` 会被 PDO 当成路径而报错。
+> Upstash 同理，连接串必须是 `rediss://`，且 `REDIS_CLIENT` 必须显式设为 `predis`
+> —— `vercel-php` 运行时没有 phpredis 扩展，留默认值会白屏。
+
+**Windows 上导入 TiDB 的两个坑（实测）**
+
+1. MariaDB 自带的 `mysql.exe` 走的是 Windows SChannel，连 TiDB 会报
+   `TLS/SSL error: The specified data could not be decrypted (0x80090330)`，
+   加 `--ssl` 也没用（10.11 客户端不认 `--ssl-mode`）。临时 CA 要另给：
+   下载 <https://curl.se/ca/cacert.pem>，再 `--ssl-ca=cacert.pem`；
+   仍失败就用 PHP 的 PDO 导入（`PDO::MYSQL_ATTR_SSL_CA` 走 OpenSSL，不受影响）。
+2. TiDB Cloud Starter 只给你一个 `test` 库，先 `CREATE DATABASE dootask`。导入后表名带 `pre_` 前缀，
+   所以线上的 `DB_PREFIX` 必须是 `pre_`，否则接口报"表不存在"。
 
 ### 5.1 GitHub 集成部署（推荐，本仓库已就绪）
 
@@ -240,20 +295,28 @@ PLATFORM_CONTRACT_ENABLED=true
 bash deploy/vercel/verify.sh https://dootask.vercel.app
 ```
 
-### 5.2 CLI 部署（备用）
+### 5.2 CLI 一键部署（含环境变量与验收）
+
+仓库已备好脚本，Token 认证即可全自动：
 
 ```bash
 cd D:/dt-run/dootask
-npm i -g vercel
-vercel login
-vercel link              # 首次会问项目名，Framework 选 Other
-vercel env add APP_KEY production
-# …其余环境变量同理
-vercel                   # 先发 Preview
-vercel --prod            # 再上生产
+cp deploy/vercel/env.vercel.local.example deploy/vercel/env.vercel.local
+# 填完 DB_*/REDIS_*/APP_KEY 后：
+VERCEL_TOKEN=<在 vercel.com/account/tokens 生成> bash deploy/vercel/deploy.sh
 ```
 
-部署完成后，Vercel 会给形如 `https://<project>-<hash>-<team>.vercel.app` 的地址，再执行第 6 节的验收。
+脚本做五件事：`link` 项目 → 逐条写入 Production 环境变量（已存在先删再加）→
+`deploy --prod --archive=tgz` → 自动跑 `verify.sh` → 打印地址与结论。
+变量文件里任何一项留空会被前置检查直接拒绝，避免部署成功后才在运行期炸。
+
+可选：`VERCEL_SCOPE=<团队slug>`、`VERCEL_PROJECT=<项目名>`、`SKIP_VERIFY=1`。
+
+> **Windows 上不要用 `vercel deploy --temporary`。** 匿名部署会改为**本地构建**，
+> CLI 安装 `vercel-php` 构建器时需要在缓存目录创建符号链接，未开开发者模式会报
+> `EPERM: operation not permitted, symlink ...`，且该缓存清理会触发安全策略拦截。
+> 走 Token 认证时构建在 Vercel 云端 Linux 上进行，不触发此限制。
+> 若确实需要匿名临时部署，只能改用 WSL/Linux 机器或临时开启开发者模式。
 
 ---
 
@@ -297,8 +360,12 @@ vercel --prod            # 再上生产
 **7.5 数据库连接超时 / `SQLSTATE[HY000] [2002]`**
 云库没放通公网：PlanetScale/TiDB 需开 IP allowlist（Vercel 出口 IP 不固定，只能 `0.0.0.0/0` + TLS，或用 Secure Compute 固定出口）。也可能是同区选错：`regions` 与数据库所在区域要一致。
 
-**7.6 Redis 连不上**
-Upstash 默认给 `rediss://default:pass@host:port` 这种 URL，而项目 `config/database.php` 读的是 `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD` 分项，必须手工拆开；TLS 端口通常是 `6379`（部分厂商是 `6380`）。
+**7.6 Redis 连不上 / 首页 500 但 `/api/*` 正常**
+分三层查，按顺序命中率最高：
+
+1. **`REDIS_URL` 设了但不生效**：`predis` 1.x 只在拿到**字符串**时才解析 URL，而 Laravel 的 `PredisConnector` 传的是**数组**，`url` 键会被忽略、静默回落到 `127.0.0.1`。必须拆成 `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`，再加 `REDIS_SCHEME=tls`（`rediss://` 等价于 `scheme=tls`）。
+2. **`ERR Only 0th database is supported`**：Upstash（以及多数托管 Redis）只提供 db 0，而 Laravel 的 `cache` 连接默认 `SELECT 1`。这会让**首页渲染 500、API 却正常**——因为 cache 只在 web 路由里被用到。加 `REDIS_DB=0` 与 `REDIS_CACHE_DB=0`。
+3. **TLS 证书校验失败**：运行时没有 CA 包时置 `REDIS_SSL_VERIFY=false`（本项目 `config/database.php` 已把该开关透传给 predis 的 `ssl.verify_peer`）。
 
 **7.7 登录返回 419 / 登录成功后立即掉线**
 419 是 CSRF：Vercel 侧 `APP_URL` 若非真实域名会导致 cookie 域不匹配。掉线是 `SESSION_DRIVER=file` 写在只读盘，改成 `redis`。
@@ -317,6 +384,33 @@ Upstash 默认给 `rediss://default:pass@host:port` 这种 URL，而项目 `conf
 
 **7.12 WebSocket 一直 connecting**
 前端连的是 `ws://host:5200`，Vercel 不提供长连接端口。函数实例回收即断线，无法靠配置解决。
+
+**7.13 `vercel logs` 只看到堆栈尾部，看不到异常首行**
+Vercel 运行时日志对单条消息有长度上限，Laravel 的堆栈一长，异常类型和消息那几行就被截掉了，只剩 `#50/#51/#52`。排障时用响应头把摘要带出来（临时改 `api/index.php`，用完即删）：
+
+```php
+// 临时代码，勿长期保留：会把异常信息暴露给调用方
+$app->singleton(\Illuminate\Contracts\Debug\ExceptionHandler::class, static function ($app) {
+    return new class ($app) extends \App\Exceptions\Handler {
+        public function render($request, \Throwable $e)
+        {
+            $response = parent::render($request, $e);
+            $response->headers->set('X-Diag', base64_encode(
+                get_class($e) . ': ' . preg_replace('/\s+/', ' ', $e->getMessage())
+            ));
+            return $response;
+        }
+    };
+});
+```
+
+然后 `curl -sI` 或任意 HTTP 头查询服务看 `X-Diag`，base64 解出来就是真正的报错。**必须用完删除**——留着等于对外泄露异常详情。
+
+**7.14 页面 200 但内容是 PHP 源码**
+见 2.1 第 4 条：`/` 与 `*.php` 被静态根 `public/` 当文件直出，响应头为 `application/x-httpd-php`。补上 `/{ "src": "/", ... }` 与 `/[^/]*\.php$` 两条路由，并重新部署（旧的会被 CDN 缓存）。
+
+**7.15 CLI 报 `--create-if-missing requires --project`**
+Vercel CLI 65.x 起，已 `link` 过的目录再带 `--create-if-missing` 会被判为非法组合。`deploy.sh` 里已补 `--project "$PROJECT"`；若你手敲命令，去掉 `--create-if-missing` 即可。
 
 ---
 

@@ -13,6 +13,11 @@
 /docker-compose.yml
 /.dockerignore
 
+# 仓库根的无扩展名构建脚本（仅 docker 构建用，Vercel 的 build/install 已被 vercel.json 覆盖）
+# 必须排除：Vercel 的框架探测会把它当作 Go 项目的 cmd/ 目录去 stat cmd/api/main.go，
+# 而它其实是普通文件，探测直接抛 ENOTDIR: not a directory 导致构建失败。
+/cmd
+
 # 版本库与 CI
 /.git
 /.github
@@ -41,3 +46,6 @@
 /docs
 /demo
 /cache
+
+# Vercel CLI 生成的本地 OIDC 令牌
+/.env.local

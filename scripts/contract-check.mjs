@@ -132,6 +132,7 @@ const REQUIRED_DELIVERABLES = [
   "docs/platform/README.md",
   "docs/platform/openapi.yaml",
   "docs/platform/event-envelope.yaml",
+  "docs/platform/实训平台_统一身份与网关接入说明.md",
   "docs/platform/permissions.md",
   "docs/platform/data-dictionary-mapping.md",
   "docs/platform/network-matrix.md",

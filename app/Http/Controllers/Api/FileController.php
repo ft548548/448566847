@@ -593,7 +593,9 @@ class FileController extends AbstractController
         //
         if ($status === 2) {
             $parse = parse_url($url);
-            $from = 'http://' . env('APP_IPPR') . '.3' . $parse['path'] . '?' . $parse['query'];
+            // 原实现写死 Docker 内网地址（http://{APP_IPPR}.3…），裸机上不可达。
+            // 改为按 APP_URL 还原同一路径，保证回写下载走本机可访问地址。
+            $from = url($parse['path'] ?? '/') . (empty($parse['query']) ? '' : '?' . $parse['query']);
             $path = 'uploads/file/' . $file->type . '/' . date("Ym") . '/' . $file->id . '/' . $key;
             $save = public_path($path);
             Base::makeDir(dirname($save));

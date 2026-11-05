@@ -11,9 +11,9 @@
     }
   },
   "routes": [
-    { "src": "/(js|css|images|fonts|sound|avatars)/(.*)", "dest": "/public/$1/$2" },
-    { "src": "/(favicon\\.ico|robots\\.txt|manifest\\.json)", "dest": "/public/$1" },
     { "src": "/api/(.*)", "dest": "/api/index.php" },
+    { "src": "/[^/]*\\.php$", "dest": "/api/index.php" },
+    { "src": "/", "dest": "/api/index.php" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/api/index.php" }
   ]

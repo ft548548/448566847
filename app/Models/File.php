@@ -388,11 +388,10 @@ class File extends AbstractModel
                 else
                 {
                     // 其他预览
-                    if (in_array($fileExt, File::localExt)) {
-                        $url = Base::fillUrl($filePath);
-                    } else {
-                        $url = 'http://' . env('APP_IPPR') . '.3/' . $filePath;
-                    }
+                    // 说明：原实现写死 Docker 内网地址（http://{APP_IPPR}.3/…），
+                    // 在裸机/云服务器上该地址不可达，预览链接会失效。
+                    // 改用 url() 按 APP_URL（或当前请求）生成，容器与裸机均正确。
+                    $url = url($filePath);
                     $data['content'] = [
                         'preview' => true,
                         'url' => base64_encode(Base::urlAddparameter($url, [
