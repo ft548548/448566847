@@ -9,19 +9,18 @@
 
 ## 1 已落地的东西
 
-| 能力                 | 位置                                       | 一句话                                                                              |
-| -------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------- |
-| 请求头治理与信封叠加 | `app/Http/Middleware/PlatformContract.php` | 校验/生成 `X-Request-Id`，白名单校验 `X-App-Code`，响应体追加 `code` 与 `requestId` |
-| 访问日志             | `storage/logs/platform-access.log`         | 每请求一行 JSON，含 requestId/耗时/状态/IP                                          |
-| API 契约             | `docs/platform/openapi.yaml`               | OpenAPI 3.0.3，23 个核心接口，与控制器方法双向对账                                  |
-| 事件契约             | `docs/platform/event-envelope.yaml`        | 封套与目录已定义；本期不生产不消费（DV-11）                                         |
-| 权限映射             | `docs/platform/permissions.md`             | 规范权限点 → DooTask 实际服务端判定                                                 |
-| 字段映射             | `docs/platform/data-dictionary-mapping.md` | 公共实体 → DooTask 表/字段                                                          |
-| 网络矩阵             | `docs/platform/network-matrix.md`          | 实际拓扑 + 生产目标 + 缺口清单                                                      |
-| 日志说明             | `docs/platform/logging.md`                 | 字段定义与排查流程                                                                  |
-| 偏离登记             | `docs/platform/deviations.md`              | 14 条偏离，逐条写清理由与补偿                                                       |
-| Vercel 部署          | `docs/platform/deployment-vercel.md`       | 受限部署：入口、环境变量、验收清单与 7 项能力失效说明                               |
-| 离线 Demo            | `demo/index.html`                          | 单文件零网络，三角色权限差异 + 一条联动流程                                         |
+| 能力                 | 位置                                                                                         | 一句话                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 请求头治理与信封叠加 | `app/Http/Middleware/PlatformContract.php`                                                   | 校验/生成 `X-Request-Id`，白名单校验 `X-App-Code`，响应体追加 `code` 与 `requestId`                |
+| 访问日志             | `storage/logs/platform-access.log`                                                           | 每请求一行 JSON，含 requestId/耗时/状态/IP                                                         |
+| API 契约             | `docs/platform/openapi.yaml`                                                                 | OpenAPI 3.0.3，23 个核心接口，与控制器方法双向对账                                                 |
+| 事件契约             | `docs/platform/event-envelope.yaml`                                                          | 封套与目录已定义；本期不生产不消费（DV-11）                                                        |
+| 统一身份与网关       | `docs/platform/实训平台_统一身份与网关接入说明.md`                                           | **接入唯一依据**（V3.0）：身份认证、账号权限、网关接入、接口约定、数据交互、异常处理、考试平台对接 |
+| 字段映射             | `docs/platform/data-dictionary-mapping.md`                                                   | 公共实体 → DooTask 表/字段                                                                         |
+| 旧文档指引           | `permissions.md` / `network-matrix.md` / `logging.md` / `identity-and-gateway-onboarding.md` | 仅为旧链接保留，内容已并入统一文档，不再维护                                                       |
+| 偏离登记             | `docs/platform/deviations.md`                                                                | 14 条偏离，逐条写清理由与补偿                                                                      |
+| Vercel 部署          | `docs/platform/deployment-vercel.md`                                                         | 受限部署：入口、环境变量、验收清单与 7 项能力失效说明                                              |
+| 离线 Demo            | `demo/index.html`                                                                            | 单文件零网络，三角色权限差异 + 一条联动流程                                                        |
 
 ## 2 常用命令
 
@@ -64,17 +63,17 @@ Windows 下 PHP 不在 PATH 时，用 `PHP_BIN` 指向解释器；CI 里通常 `
 
 ## 4 规范 §13 九项交付对照
 
-|  #  | 要求                                 | 本仓库位置                                   |              状态              |
-| :-: | ------------------------------------ | -------------------------------------------- | :----------------------------: |
-|  1  | README：边界、命令、负责人、依赖服务 | 本文件                                       |               ✅               |
-|  2  | OpenAPI 3.x 与公共实体 schema        | `openapi.yaml`                               |               ✅               |
-|  3  | 角色-权限点矩阵、状态机、数据归属    | `permissions.md`（含状态取值与数据范围说明） |               ✅               |
-|  4  | SSO 客户端配置申请                   | ——                                           |      ⛔ 未接 SSO（DV-01）      |
-|  5  | 网络矩阵与部署拓扑                   | `network-matrix.md`                          |               ✅               |
-|  6  | 事件清单、schema、幂等与重试         | `event-envelope.yaml`                        |  ⚠️ 契约已定；实现缺（DV-11）  |
-|  7  | 环境变量样例（无真实密钥）           | `.env.example`                               |               ✅               |
-|  8  | 可运行 Demo 与模拟数据说明           | `demo/index.html`、`demo/README.md`          |               ✅               |
-|  9  | 联调记录、失败重放说明、日志字段     | `logging.md`                                 | ⚠️ 日志字段有；重放无（DV-11） |
+|  #  | 要求                                 | 本仓库位置                                          |             状态              |
+| :-: | ------------------------------------ | --------------------------------------------------- | :---------------------------: |
+|  1  | README：边界、命令、负责人、依赖服务 | 本文件                                              |               ✓               |
+|  2  | OpenAPI 3.x 与公共实体 schema        | `openapi.yaml`                                      |               ✓               |
+|  3  | 角色-权限点矩阵、状态机、数据归属    | 统一文档 §7（角色映射、权限矩阵、状态机、数据归属） |               ✓               |
+|  4  | SSO 客户端配置申请                   | ——                                                  |      × 未接 SSO（DV-01）      |
+|  5  | 网络矩阵与部署拓扑                   | 统一文档 §3.1、§3.6（拓扑 + 网络矩阵）              |               ✓               |
+|  6  | 事件清单、schema、幂等与重试         | `event-envelope.yaml`                               |  △ 契约已定；实现缺（DV-11）  |
+|  7  | 环境变量样例（无真实密钥）           | `.env.example`、统一文档 §13.3                      |               ✓               |
+|  8  | 可运行 Demo 与模拟数据说明           | `demo/index.html`、`demo/README.md`                 |               ✓               |
+|  9  | 联调记录、失败重放说明、日志字段     | 统一文档 §10.6、10.7、9.6                           | △ 日志字段有；重放无（DV-11） |
 
 ## 5 验证方式（可复现）
 
