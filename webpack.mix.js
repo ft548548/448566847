@@ -23,6 +23,11 @@ mix
     .webpackConfig(() => {
         let config = {
             output: {
+                // 打包产物中的模块标识前缀与 chunk 加载数组名，默认都由包名推导
+                // （DooTask: / webpackChunkDooTask）。显式改名后产物内不再出现
+                // 旧品牌标识；必须全量重编，否则新旧分包加载协议不一致。
+                uniqueName: 'policeTraining',
+                chunkLoadingGlobal: 'webpackChunkPoliceTraining',
                 filename: (pathData) => {
                     let name = pathData.chunk && pathData.chunk.name ? pathData.chunk.name : 'app';
                     return name.replace(/^\//, '') + '.js';
