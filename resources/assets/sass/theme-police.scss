@@ -1,0 +1,1325 @@
+// ============================================================
+//  警务化管理风格 · 统一视觉体系（设计系统层）
+//  ------------------------------------------------------------
+//  设计原则：
+//    1. 色彩三元：警蓝 #1d4e89 / 藏青 #0f2847 / 纸白 #ffffff，
+//       中性面用冷灰蓝，杜绝粉、绿、黄等装饰性色块；
+//    2. 形态一元：圆角统一 2px，描边统一 1px，阴影只在浮层出现，
+//       层次靠「描边 + 底色深浅」建立，不靠投影堆叠；
+//    3. 间距节奏：8 / 12 / 16 / 20 / 24 五档，卡片内边距 20px；
+//    4. 标题纪律：栏目标题左侧 3px 竖条 + 字距，形成公文标头感；
+//    5. 语义色克制：仅红（警示/超期）、琥珀（进行中）、深绿（完成）三色，
+//       且只用于状态标识，不做大面积铺底。
+//  实现约定：
+//    - 本文件在 app.scss 末尾引入，优先级高于各页面样式；
+//    - 中性面（白底/浅灰/描边）集中在 body:not(.dark-mode) 内，
+//      避免破坏暗色模式既有配色；
+//    - 只改「观感属性」（色/边/角/影/字距/内边距），不改布局尺寸。
+// ============================================================
+
+$police-font-stack: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB",
+    "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+
+$radius-control: 2px;
+$radius-panel: 2px;
+$shadow-raise: 0 8px 24px rgba(15, 40, 71, 0.16);
+$shadow-float: 0 4px 16px rgba(15, 40, 71, 0.1);
+
+// ============================================================
+//  1. 基础排版与滚动条
+// ============================================================
+body {
+    font-family: $police-font-stack;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: $primary-text-color;
+    background-color: $bg-page;
+}
+
+// 图标字体不在覆盖范围内，避免字形回退
+.ivu-btn,
+.ivu-input,
+.ivu-select-selection,
+.ivu-select-item,
+.ivu-table,
+.ivu-modal-body,
+.ivu-modal-header-inner,
+.ivu-form-item-label,
+.ivu-dropdown-item,
+.ivu-page-item,
+.ivu-tabs-tab,
+.ivu-steps-title,
+.ivu-drawer-body,
+.ivu-message-notice-content,
+.ivu-notice-title,
+.ivu-notice-desc {
+    font-family: $police-font-stack;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+    color: $primary-title-color;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+
+::selection {
+    background: rgba(29, 78, 137, 0.16);
+    color: $primary-title-color;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c2cbd8;
+    border-radius: 0;
+
+    &:hover {
+        background: #a4b2c4;
+    }
+}
+
+::-webkit-scrollbar-track {
+    background: #eef1f5;
+}
+
+// ============================================================
+//  2. 按钮体系
+//    默认 32px 高，内边距 0 16px；圆角 2px；无投影；
+//    主按钮实心警蓝，次按钮白底描边，文字按钮无底色。
+// ============================================================
+.ivu-btn {
+    border-radius: $radius-control;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    box-shadow: none !important;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+// 主按钮
+.ivu-btn-primary {
+    background-color: $primary-color;
+    border-color: $primary-color;
+    color: #ffffff;
+
+    &:not([disabled]):hover,
+    &:not([disabled]):focus {
+        background-color: $primary-dark-color;
+        border-color: $primary-dark-color;
+    }
+
+    &[disabled] {
+        background-color: #a9bcd4;
+        border-color: #a9bcd4;
+        color: rgba(255, 255, 255, 0.85);
+    }
+}
+
+// 次按钮（白底描边）
+.ivu-btn-default:not([disabled]) {
+    background-color: #ffffff;
+    border-color: $border-strong-color;
+    color: $primary-title-color;
+
+    &:hover,
+    &:focus {
+        border-color: $primary-color;
+        color: $primary-color;
+        background-color: #ffffff;
+    }
+}
+
+// 文字按钮
+.ivu-btn-text:not([disabled]) {
+    color: $primary-color;
+
+    &:hover,
+    &:focus {
+        color: $primary-dark-color;
+        background-color: $primary-light-color;
+    }
+}
+
+// 语义按钮统一降饱和，接近公文用色
+.ivu-btn-success:not([disabled]) {
+    background-color: #2f7d4f;
+    border-color: #2f7d4f;
+
+    &:hover,
+    &:focus {
+        background-color: #276a43;
+        border-color: #276a43;
+    }
+}
+
+.ivu-btn-warning:not([disabled]) {
+    background-color: #b26a00;
+    border-color: #b26a00;
+
+    &:hover,
+    &:focus {
+        background-color: #965a00;
+        border-color: #965a00;
+    }
+}
+
+.ivu-btn-error:not([disabled]) {
+    background-color: $accent-color;
+    border-color: $accent-color;
+
+    &:hover,
+    &:focus {
+        background-color: #8f1e18;
+        border-color: #8f1e18;
+    }
+}
+
+// 幽灵按钮（深底上的次要操作）
+.ivu-btn-ghost:not([disabled]) {
+    border-color: $border-strong-color;
+    color: $primary-text-color;
+}
+
+.ivu-btn-group .ivu-btn:first-child {
+    border-radius: $radius-control 0 0 $radius-control;
+}
+
+.ivu-btn-group .ivu-btn:last-child {
+    border-radius: 0 $radius-control $radius-control 0;
+}
+
+// ============================================================
+//  3. 表单控件
+//    统一 1px 描边、2px 圆角、32px 高；聚焦时蓝色描边 + 静态光环；
+//    占位符与禁用态统一为中性灰蓝。
+// ============================================================
+.ivu-input,
+.ivu-input-number,
+.ivu-select-selection,
+.ivu-select-input,
+.ivu-date-picker-editor,
+.ivu-cascader .ivu-input,
+.ivu-auto-complete .ivu-input {
+    border-radius: $radius-control;
+    border: 1px solid $border-color;
+    color: $primary-title-color;
+    font-size: 13px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ivu-input:hover,
+.ivu-select-selection:hover,
+.ivu-input-number:hover {
+    border-color: $primary-color;
+}
+
+.ivu-input:focus,
+.ivu-input-number-active,
+.ivu-select-visible .ivu-select-selection,
+.ivu-date-picker-focused .ivu-input {
+    border-color: $primary-color;
+    box-shadow: 0 0 0 2px rgba(29, 78, 137, 0.12);
+}
+
+.ivu-input::placeholder,
+.ivu-select-placeholder {
+    color: #9aa5b5;
+}
+
+.ivu-input[disabled],
+.ivu-select-disabled .ivu-select-selection,
+.ivu-input-number-disabled .ivu-input-number-input {
+    background-color: $bg-subtle;
+    color: #8b95a5;
+}
+
+// 组合输入（前置/后置标签）
+.ivu-input-group-prepend,
+.ivu-input-group-append {
+    background-color: $bg-subtle;
+    border: 1px solid $border-color;
+    color: $secondary-text-color;
+}
+
+.ivu-input-group-append .ivu-btn,
+.ivu-input-group-prepend .ivu-btn {
+    border-color: $border-color;
+}
+
+// 多行文本
+textarea.ivu-input {
+    padding: 8px 10px;
+    line-height: 1.6;
+}
+
+// 表单
+.ivu-form .ivu-form-item-label {
+    color: $primary-title-color;
+    font-weight: 500;
+    padding-right: 14px;
+}
+
+.ivu-form-item-required .ivu-form-item-label::before {
+    color: $accent-color;
+}
+
+.ivu-form-item {
+    margin-bottom: 20px;
+}
+
+.form-tip {
+    color: $secondary-text-color;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+// 选择器下拉面板
+.ivu-select-dropdown {
+    border: 1px solid $border-color;
+    border-radius: $radius-control;
+    box-shadow: $shadow-float;
+    padding: 4px 0;
+}
+
+.ivu-select-item {
+    font-size: 13px;
+    color: $primary-text-color;
+    padding: 8px 12px;
+
+    &:hover {
+        background-color: $primary-light-color;
+        color: $primary-color;
+    }
+
+    &.ivu-select-item-selected,
+    &.ivu-select-item-focus {
+        background-color: $primary-light-color;
+        color: $primary-color;
+        font-weight: 500;
+    }
+}
+
+// 复选框 / 单选框
+.ivu-checkbox-inner,
+.ivu-radio-inner {
+    border-color: $border-strong-color;
+    border-radius: 2px;
+}
+
+.ivu-radio-inner {
+    border-radius: 50%;
+}
+
+.ivu-checkbox-checked .ivu-checkbox-inner {
+    background-color: $primary-color;
+    border-color: $primary-color;
+}
+
+.ivu-radio-checked .ivu-radio-inner {
+    border-color: $primary-color;
+
+    &::after {
+        background-color: $primary-color;
+    }
+}
+
+// 开关、滑块
+.ivu-switch-checked {
+    background-color: $primary-color;
+    border-color: $primary-color;
+}
+
+.ivu-slider-bar,
+.ivu-slider-wrap .ivu-slider-button {
+    border-color: $primary-color;
+}
+
+.ivu-slider-bar {
+    background-color: $primary-color;
+}
+
+// 数字输入
+.ivu-input-number-handler-wrap {
+    border-left: 1px solid $border-color;
+}
+
+.ivu-input-number-handler {
+    border-color: $border-color;
+}
+
+// ============================================================
+//  4. 卡片、面板与容器
+//    白底 + 1px 描边 + 2px 圆角 + 无投影为唯一样式；
+//    卡片头用浅灰蓝底 + 底部描边，标题左侧加 3px 竖条。
+// ============================================================
+body:not(.dark-mode) {
+    .ivu-card {
+        background-color: $bg-panel;
+        border: 1px solid $border-color;
+        border-radius: $radius-panel;
+        box-shadow: none;
+    }
+
+    .ivu-card:hover {
+        box-shadow: none;
+    }
+
+    .ivu-card-head {
+        background-color: $bg-subtle;
+        border-bottom: 1px solid $border-color;
+        padding: 12px 20px;
+    }
+
+    .ivu-card-head p,
+    .ivu-card-head-inner {
+        font-size: 14px;
+        font-weight: 600;
+        color: $primary-title-color;
+        letter-spacing: 0.4px;
+    }
+
+    // 卡片头竖条
+    .ivu-card-head p::before {
+        content: "";
+        display: inline-block;
+        width: 3px;
+        height: 14px;
+        margin-right: 8px;
+        background-color: $primary-color;
+        vertical-align: -2px;
+    }
+
+    .ivu-card-body {
+        padding: 20px;
+    }
+
+    // 通用白面板：设置项、表单容器、详情容器
+    .page-container,
+    .table-page-box {
+        background-color: $bg-panel;
+        border: 1px solid $border-color;
+        border-radius: $radius-panel;
+    }
+
+    // 分隔线
+    .ivu-divider {
+        background-color: $border-color;
+    }
+}
+
+// ============================================================
+//  5. 表格与分页（台账观感）
+//    表头浅灰蓝底、全框线、行悬停浅蓝；分页方形按钮。
+// ============================================================
+.ivu-table {
+    font-size: 13px;
+    color: $primary-text-color;
+
+    th {
+        background-color: #eef2f7 !important;
+        color: $primary-title-color;
+        font-weight: 600;
+        font-size: 12.5px;
+        letter-spacing: 0.3px;
+        height: 42px;
+    }
+
+    td {
+        height: 44px;
+        border-bottom: 1px solid #e3e9f1;
+    }
+
+    th,
+    td {
+        border-right: 1px solid #e3e9f1;
+    }
+
+    &::before,
+    &::after {
+        background-color: $border-strong-color;
+    }
+
+    th::before {
+        background-color: transparent;
+    }
+}
+
+.ivu-table-wrapper {
+    border: 1px solid $border-strong-color;
+    border-radius: $radius-panel;
+    overflow: hidden;
+}
+
+.ivu-table-row-hover td,
+.ivu-table-row-highlight td {
+    background-color: #f2f6fb !important;
+}
+
+.ivu-table-stripe .ivu-table-body tr:nth-child(2n) td {
+    background-color: #fafbfd;
+}
+
+// 分页
+.ivu-page-item {
+    border-radius: $radius-control;
+    border-color: $border-color;
+    background-color: #ffffff;
+    min-width: 30px;
+    height: 30px;
+    line-height: 28px;
+
+    a {
+        color: $primary-text-color;
+        font-size: 13px;
+    }
+
+    &:hover {
+        border-color: $primary-color;
+
+        a {
+            color: $primary-color;
+        }
+    }
+}
+
+.ivu-page-item-active {
+    background-color: $primary-color;
+    border-color: $primary-color;
+
+    a,
+    &:hover a {
+        color: #ffffff;
+    }
+}
+
+.ivu-page-prev,
+.ivu-page-next {
+    border-radius: $radius-control;
+    border-color: $border-color;
+    background-color: #ffffff;
+}
+
+// ============================================================
+//  6. 标签、徽标、进度、头像
+// ============================================================
+.ivu-tag {
+    border-radius: $radius-control;
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    border: 1px solid transparent;
+    line-height: 20px;
+}
+
+.ivu-tag-default {
+    background-color: #f2f5f9;
+    border-color: $border-color;
+    color: $primary-text-color;
+}
+
+.ivu-tag-blue,
+.ivu-tag-primary {
+    background-color: $primary-light-color;
+    border-color: rgba(29, 78, 137, 0.28);
+    color: $primary-color;
+}
+
+.ivu-tag-green,
+.ivu-tag-success {
+    background-color: #eef6f0;
+    border-color: rgba(47, 125, 79, 0.28);
+    color: #2f7d4f;
+}
+
+.ivu-tag-orange,
+.ivu-tag-warning {
+    background-color: #fdf4e6;
+    border-color: rgba(178, 106, 0, 0.28);
+    color: #b26a00;
+}
+
+.ivu-tag-red,
+.ivu-tag-error {
+    background-color: $accent-light-color;
+    border-color: rgba(179, 38, 30, 0.26);
+    color: $accent-color;
+}
+
+.ivu-badge-count {
+    background-color: $accent-color;
+    box-shadow: none;
+    font-weight: 500;
+}
+
+.ivu-progress-bg {
+    background-color: $primary-color;
+    border-radius: 0;
+}
+
+.ivu-progress-outer .ivu-progress-inner {
+    background-color: #e6ebf2;
+    border-radius: 0;
+}
+
+.ivu-avatar {
+    border-radius: 2px;
+}
+
+// ============================================================
+//  7. 弹层：Modal / Drawer / Dropdown / Tooltip / 消息
+//    深蓝标题条形成「文头」，底部操作区浅底分隔。
+// ============================================================
+.ivu-modal-content {
+    border-radius: $radius-panel;
+    box-shadow: $shadow-raise;
+    border: 1px solid rgba(15, 40, 71, 0.12);
+}
+
+.ivu-modal-header {
+    background-color: #f2f6fb;
+    border-bottom: 1px solid $border-color;
+    padding: 14px 20px;
+}
+
+.ivu-modal-header p,
+.ivu-modal-header-inner {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-title-color;
+    letter-spacing: 0.5px;
+}
+
+.ivu-modal-header p::before,
+.ivu-modal-header-inner::before {
+    content: "";
+    display: inline-block;
+    width: 3px;
+    height: 15px;
+    margin-right: 9px;
+    background-color: $primary-color;
+    vertical-align: -2px;
+}
+
+.ivu-modal-body {
+    padding: 20px;
+    font-size: 13px;
+}
+
+.ivu-modal-footer {
+    border-top: 1px solid $border-color;
+    background-color: #fafbfd;
+    padding: 12px 20px;
+}
+
+.ivu-modal-mask {
+    background-color: rgba(15, 40, 71, 0.45);
+}
+
+// 抽屉
+.ivu-drawer-content {
+    box-shadow: -8px 0 28px rgba(15, 40, 71, 0.18);
+}
+
+.ivu-drawer-header {
+    background-color: #f2f6fb;
+    border-bottom: 1px solid $border-color;
+    padding: 14px 20px;
+}
+
+.ivu-drawer-header p,
+.ivu-drawer-header-inner {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary-title-color;
+    letter-spacing: 0.5px;
+}
+
+.ivu-drawer-body {
+    font-size: 13px;
+    padding: 20px;
+}
+
+// 下拉菜单
+.ivu-dropdown-menu,
+.ivu-dropdown .ivu-select-dropdown {
+    border: 1px solid $border-color;
+    border-radius: $radius-control;
+    box-shadow: $shadow-float;
+    padding: 4px 0;
+}
+
+.ivu-dropdown-item {
+    font-size: 13px;
+    color: $primary-text-color;
+    padding: 8px 14px;
+
+    &:hover {
+        background-color: $primary-light-color;
+        color: $primary-color;
+    }
+}
+
+.ivu-dropdown-item-divided::before {
+    border-top: 1px solid $border-color;
+}
+
+// 气泡与提示
+.ivu-tooltip-inner,
+.ivu-poptip-inner {
+    border-radius: $radius-control;
+    background-color: $primary-deep-color;
+    box-shadow: $shadow-float;
+    font-size: 12.5px;
+}
+
+.ivu-tooltip-inner {
+    color: #eef2f7;
+}
+
+.ivu-tooltip-arrow {
+    border-bottom-color: $primary-deep-color !important;
+}
+
+.ivu-poptip-inner {
+    background-color: #ffffff;
+    border: 1px solid $border-color;
+    color: $primary-text-color;
+}
+
+.ivu-poptip-title {
+    border-bottom: 1px solid $border-color;
+    font-weight: 600;
+    color: $primary-title-color;
+}
+
+// 全局消息与通知
+.ivu-message-notice-content {
+    border-radius: $radius-control;
+    border: 1px solid $border-color;
+    box-shadow: $shadow-float;
+    padding: 10px 16px;
+    font-size: 13px;
+}
+
+.ivu-notice-notice {
+    border-radius: $radius-panel;
+    border: 1px solid $border-color;
+    box-shadow: $shadow-float;
+}
+
+.ivu-notice-title {
+    font-weight: 600;
+    color: $primary-title-color;
+}
+
+// 加载遮罩
+.ivu-spin-fix {
+    background-color: rgba(255, 255, 255, 0.82);
+}
+
+.ivu-spin-dot {
+    background-color: $primary-color;
+}
+
+// ============================================================
+//  8. 标签页与步骤条
+// ============================================================
+.ivu-tabs-bar {
+    border-bottom: 1px solid $border-color;
+    margin-bottom: 16px;
+}
+
+.ivu-tabs-tab {
+    font-size: 13px;
+    color: $primary-text-color;
+    padding: 8px 16px;
+
+    &:hover {
+        color: $primary-color;
+    }
+}
+
+.ivu-tabs-tab-active,
+.ivu-tabs-tab-active:hover {
+    color: $primary-color;
+    font-weight: 600;
+}
+
+.ivu-tabs-ink-bar {
+    background-color: $primary-color;
+    height: 2px;
+}
+
+.ivu-tabs.ivu-tabs-card > .ivu-tabs-bar .ivu-tabs-tab {
+    background-color: $bg-subtle;
+    border: 1px solid $border-color;
+    border-radius: $radius-control $radius-control 0 0;
+}
+
+.ivu-tabs.ivu-tabs-card > .ivu-tabs-bar .ivu-tabs-tab-active {
+    background-color: #ffffff;
+    border-bottom-color: #ffffff;
+}
+
+.ivu-steps-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: $primary-title-color;
+}
+
+.ivu-steps-head-inner {
+    border-radius: 2px;
+    border-color: $border-strong-color;
+    color: $secondary-text-color;
+}
+
+.ivu-steps-item.ivu-steps-status-process .ivu-steps-head-inner {
+    background-color: $primary-color;
+    border-color: $primary-color;
+    color: #ffffff;
+}
+
+.ivu-steps-item.ivu-steps-status-finish .ivu-steps-head-inner {
+    border-color: $primary-color;
+    color: $primary-color;
+
+    > .ivu-steps-icon {
+        color: $primary-color;
+    }
+}
+
+.ivu-steps-item.ivu-steps-status-finish .ivu-steps-tail > i::after {
+    background-color: $primary-color;
+}
+
+// ============================================================
+//  9. 主框架：侧边栏、顶栏与页头横幅
+// ============================================================
+body:not(.dark-mode) {
+    .page-manage {
+        background-color: $bg-page;
+    }
+
+    // 侧边栏：浅冷灰底 + 右侧描边，选中项白底 + 左竖条
+    .manage-box-menu {
+        background-color: #f5f7fa;
+        border-right: 1px solid $border-color;
+
+        > ul > li {
+            border-radius: $radius-control;
+            transition: background-color 0.15s, box-shadow 0.15s, color 0.15s;
+
+            &.active {
+                background-color: #ffffff;
+                color: $primary-color;
+                box-shadow: inset 3px 0 0 $primary-color;
+            }
+
+            &:not(.menu-project):not(.active):hover {
+                background-color: rgba(29, 78, 137, 0.06);
+            }
+        }
+
+        .menu-project > ul > li.active .project-h1 {
+            background-color: #ffffff;
+            box-shadow: inset 3px 0 0 $primary-color;
+        }
+    }
+
+    // 项目列表容器
+    .page-project .project-list {
+        background-color: #fafbfd;
+        border-right: 1px solid $border-color;
+    }
+
+    .project-head {
+        background-color: #ffffff;
+        border-bottom: 1px solid $border-color;
+    }
+
+    // 设置页
+    .page-setting {
+        .setting-menu {
+            background-color: #f5f7fa;
+            border-right: 1px solid $border-color;
+        }
+
+        .setting-head {
+            background-color: #ffffff;
+            border-bottom: 1px solid $border-color;
+        }
+
+        .setting-title {
+            color: $primary-title-color;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .setting-box {
+            background-color: #ffffff;
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+            padding: 20px 24px;
+        }
+
+        .setting-content {
+            background-color: $bg-page;
+        }
+
+        // 栏目标题：浅蓝底 + 左侧竖条
+        .setting-content-title {
+            color: $primary-title-color;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            padding-left: 12px;
+            border-left: 3px solid $primary-color;
+            line-height: 1.4;
+        }
+
+        // 设置项卡片（原先 8px 圆角 + 发光阴影）
+        .setting-box .ivu-card,
+        .setting-box > div {
+            border-radius: $radius-panel;
+        }
+    }
+}
+
+// ============================================================
+// 10. 仪表盘：统计卡改为「警蓝 / 警示红 / 藏青」三色
+// ============================================================
+body:not(.dark-mode) {
+    .page-dashboard {
+        background-color: #ffffff;
+
+        .dashboard-hello {
+            color: $primary-title-color;
+            font-weight: 600;
+            letter-spacing: 1px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid $border-color;
+            position: relative;
+
+            &::after {
+                content: "";
+                position: absolute;
+                left: 12px;
+                bottom: -1px;
+                width: 72px;
+                height: 2px;
+                background-color: $primary-color;
+            }
+        }
+
+        .dashboard-desc {
+            color: $secondary-text-color;
+        }
+
+        .dashboard-block > li {
+            border-radius: $radius-panel;
+            padding: 16px 20px;
+            background-image: none !important;
+            background-color: $primary-color;
+            border: 1px solid transparent;
+            box-shadow: none;
+            transition: background-color 0.15s, border-color 0.15s;
+
+            // 今日待办：警蓝
+            &:first-child {
+                background-color: $primary-color;
+            }
+
+            // 已逾期：警示红
+            &:nth-child(2) {
+                background-color: #9e2b23;
+            }
+
+            // 全部任务：藏青
+            &:last-child {
+                background-color: $primary-deep-color;
+                margin-right: 0;
+            }
+
+            &:hover {
+                transform: none;
+                box-shadow: none;
+                border-color: rgba(255, 255, 255, 0.35);
+            }
+
+            .block-title {
+                color: rgba(255, 255, 255, 0.72);
+                font-size: 12px;
+                letter-spacing: 1px;
+            }
+
+            .block-data {
+                padding-top: 12px;
+
+                .block-num {
+                    color: #ffffff;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                }
+
+                .taskfont {
+                    color: rgba(255, 255, 255, 0.55);
+                }
+            }
+        }
+
+        .dashboard-list {
+            .dashboard-title {
+                font-weight: 600;
+                font-size: 14px;
+                color: $primary-title-color;
+                letter-spacing: 0.5px;
+                background-color: #ffffff;
+                background-image: linear-gradient($primary-color, $primary-color);
+                background-size: 3px 16px;
+                background-position: 0 center;
+                background-repeat: no-repeat;
+                padding-left: 12px;
+                border-bottom: 1px solid $border-color;
+            }
+
+            .dashboard-ul > li {
+                background-color: #ffffff;
+                border: 1px solid $border-color;
+                border-radius: $radius-panel;
+                padding: 12px 14px;
+                box-shadow: none;
+                transition: background-color 0.15s, border-color 0.15s;
+
+                &:hover {
+                    transform: none;
+                    box-shadow: none;
+                    border-color: rgba(29, 78, 137, 0.4);
+                    background-color: #fafcff;
+                }
+
+                .item-title > span {
+                    border-radius: 2px;
+                    font-size: 11px;
+                    letter-spacing: 0.2px;
+                }
+            }
+        }
+
+        .nopage-text {
+            border-radius: 2px;
+            color: $secondary-text-color;
+        }
+    }
+}
+
+// ============================================================
+// 11. 任务与项目列表
+// ============================================================
+body:not(.dark-mode) {
+    .task-rows > div {
+        border-bottom: 1px solid #ebeff5;
+        transition: background-color 0.12s;
+
+        &:hover {
+            background-color: #f7fafd;
+        }
+    }
+
+    .task-add {
+        background-color: #ffffff;
+        border: 1px dashed $border-strong-color;
+        border-radius: $radius-panel;
+
+        &:hover {
+            border-color: $primary-color;
+        }
+    }
+
+    .project-management,
+    .team-management {
+        .management-title {
+            font-weight: 600;
+            color: $primary-title-color;
+            letter-spacing: 0.5px;
+            padding-left: 12px;
+            border-left: 3px solid $primary-color;
+            line-height: 1.4;
+        }
+    }
+
+    .project-list {
+        .project-head {
+            font-weight: 600;
+            color: $primary-title-color;
+        }
+    }
+}
+
+// ============================================================
+// 12. 消息模块
+// ============================================================
+body:not(.dark-mode) {
+    .page-messenger {
+        .messenger-menu,
+        .messenger-list {
+            background-color: #ffffff;
+            border-right: 1px solid $border-color;
+        }
+
+        .messenger-list > .dialog,
+        .dialog {
+            border-radius: $radius-control;
+            transition: background-color 0.12s;
+
+            &:hover {
+                background-color: #f5f8fc;
+            }
+
+            &.active {
+                background-color: $primary-light-color;
+                box-shadow: inset 2px 0 0 $primary-color;
+            }
+        }
+
+        .dialog-title {
+            color: $primary-title-color;
+            font-weight: 500;
+        }
+
+        .dialog-text {
+            color: $secondary-text-color;
+        }
+
+        .messenger-msg {
+            background-color: #ffffff;
+            border-left: 1px solid $border-color;
+        }
+
+        .msg-dialog-bg {
+            color: $secondary-text-color;
+        }
+    }
+}
+
+// ============================================================
+// 13. 文件模块
+// ============================================================
+body:not(.dark-mode) {
+    .page-file {
+        .file-item {
+            background-color: #ffffff;
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+            transition: border-color 0.15s, background-color 0.15s;
+
+            &:hover {
+                border-color: rgba(29, 78, 137, 0.45);
+                background-color: #fafcff;
+            }
+
+            &.file-checked {
+                border-color: $primary-color;
+                background-color: $primary-light-color;
+            }
+        }
+
+        .file-head {
+            background-color: #ffffff;
+            border-bottom: 1px solid $border-color;
+        }
+
+        .upload-wrap {
+            border: 1px dashed $border-strong-color;
+            border-radius: $radius-panel;
+            background-color: #fafbfd;
+
+            &.drag-over {
+                border-color: $primary-color;
+                background-color: $primary-light-color;
+            }
+        }
+
+        .file-name {
+            color: $primary-title-color;
+        }
+    }
+}
+
+// ============================================================
+// 14. 项目大厅（招募）
+// ============================================================
+body:not(.dark-mode) {
+    .page-recruitment {
+        background-color: $bg-page;
+
+        .recruitment-toolbar {
+            background-color: #ffffff;
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+            padding: 14px 20px;
+        }
+
+        .recruitment-card {
+            background-color: #ffffff;
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+            box-shadow: none;
+            padding: 18px 20px;
+            transition: border-color 0.15s, background-color 0.15s;
+
+            &:hover {
+                border-color: rgba(29, 78, 137, 0.45);
+                box-shadow: none;
+                background-color: #fafcff;
+            }
+        }
+
+        .recruitment-card-head {
+            border-bottom: 1px solid #ebeff5;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .recruitment-title {
+            color: $primary-title-color;
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.4px;
+        }
+
+        .recruitment-desc {
+            color: $primary-text-color;
+            line-height: 1.7;
+        }
+
+        .recruitment-meta {
+            color: $secondary-text-color;
+            font-size: 12px;
+        }
+
+        .recruitment-tags .ivu-tag {
+            border-radius: $radius-control;
+        }
+
+        .recruitment-steps {
+            background-color: #f7f9fc;
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+        }
+
+        .recruitment-empty {
+            color: $secondary-text-color;
+        }
+    }
+
+    .page-recruitment-detail {
+        .recruitment-card {
+            border: 1px solid $border-color;
+            border-radius: $radius-panel;
+            background-color: #ffffff;
+        }
+    }
+}
+
+// ============================================================
+// 15. 日历
+// ============================================================
+body:not(.dark-mode) {
+    .page-calendar {
+        .calendar-head {
+            background-color: #ffffff;
+            border-bottom: 1px solid $border-color;
+        }
+
+        .calendar-title {
+            color: $primary-title-color;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .calendar-box,
+        .calendar-view {
+            background-color: #ffffff;
+            border-color: $border-color;
+        }
+    }
+}
+
+// ============================================================
+// 16. 登录页与落地页
+// ============================================================
+body:not(.dark-mode) {
+    .page-login {
+        background-color: $bg-page;
+        background-image: linear-gradient(
+            180deg,
+            $primary-deep-color 0%,
+            $primary-color 48%,
+            $bg-page 48%,
+            $bg-page 100%
+        );
+
+        .login-body .login-box {
+            border-radius: $radius-panel;
+            border: 1px solid $border-color;
+            border-top: 3px solid $primary-color;
+            box-shadow: 0 14px 36px rgba(15, 40, 71, 0.22);
+            background-color: #ffffff;
+        }
+
+        .login-title {
+            letter-spacing: 3px;
+            color: $primary-title-color;
+            font-weight: 600;
+        }
+
+        .login-subtitle {
+            letter-spacing: 0.6px;
+            color: $secondary-text-color;
+        }
+
+        .login-code {
+            border-radius: $radius-control;
+        }
+    }
+
+    .page-index .page-warp {
+        .page-header {
+            background-image: linear-gradient(135deg, $primary-deep-color 0%, $primary-color 100%);
+        }
+    }
+}
+
+// ============================================================
+// 17. 暗色模式
+//     本项目暗色主题由 SVG feColorMatrix 滤镜（web.js createDarkFilter）
+//     对整个浅色主题自动映射生成（body 类名为 dark-mode-reverse），
+//     不存在 body.dark-mode 选择器。浅色主题是唯一事实源，
+//     警务蓝等色值会被滤镜自动映射为暗色下的对应观感，
+//     因此此处无需（也不应）另写一套暗色规则。
+// ============================================================
+
+// ============================================================
+// 18. 响应式：小屏下保持同一套描边与间距节奏
+// ============================================================
+@media (max-width: 768px) {
+    body:not(.dark-mode) {
+        .page-dashboard .dashboard-block > li {
+            padding: 12px 16px;
+        }
+
+        .page-setting .setting-box {
+            padding: 16px;
+        }
+
+        .recruitment-card {
+            padding: 14px 16px;
+        }
+    }
+}

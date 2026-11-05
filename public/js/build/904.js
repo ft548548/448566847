@@ -1,1 +1,1 @@
-"use strict";(self.webpackChunkDooTask=self.webpackChunkDooTask||[]).push([[904],{73904:(s,e,k)=>{k.r(e),k.d(e,{default:()=>a});const a=k(17694).Z}}]);
+"use strict";(self.webpackChunkPoliceTraining=self.webpackChunkPoliceTraining||[]).push([[904],{73904:(e,i,n)=>{n.r(i),n.d(i,{default:()=>c});const c=n(17694).Z}}]);

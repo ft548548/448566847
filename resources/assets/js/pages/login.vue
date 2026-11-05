@@ -150,12 +150,7 @@ export default {
         },
 
         welcomeTitle() {
-            let title = window.systemInfo.title || "DooTask";
-            if (title == "PublicDooTask") {
-                return "Public DooTask"
-            } else {
-                return "Welcome " + title
-            }
+            return this.$L('欢迎使用') + (window.systemInfo.title || "警务实训平台");
         },
 
         loginText() {

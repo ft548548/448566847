@@ -86,7 +86,7 @@
                         {{ $L("轻量级任务管理工具") }}
                     </div>
                     <div class="header-tips">
-                        {{ $L(`${appTitle}是一款轻量级的开源在线项目任务管理工具，提供各类文档协作工具、在线思维导图、在线流程图、项目管理、任务分发、即时IM，文件管理等工具。`) }}
+                        {{ $L('警务实训平台是面向警务实战一体化教学的协同工作平台，提供项目管理、任务分发、文档协作、即时通讯与文件管理等功能。') }}
                     </div>
                     <div class="login-buttom no-dark-mode" @click="login">
                         {{ $L("登录") }}
@@ -195,7 +195,7 @@ export default {
         },
 
         appTitle() {
-            return  window.systemInfo.title || "DooTask";
+            return  window.systemInfo.title || "警务实训平台";
         },
     },
     mounted() {

@@ -1,9 +1,38 @@
-$primary-color: #8bcf70;
-$primary-title-color: #303133;
-$primary-text-color: #606266;
+// ============================================================
+//  设计令牌（警务化管理风格）
+//  ------------------------------------------------------------
+//  改造原则：
+//   1. 主色由浅绿改为「警蓝」，饱和度统一压低，避免明快活泼的观感；
+//   2. 强调色只保留一处正红，用于警示/必填/超期，不做装饰性使用；
+//   3. 状态色保留语义可区分性，但降低饱和度，接近公文/台账配色；
+//   4. 圆角、阴影交由 theme-police.scss 统一收敛，此处只定色。
+// ============================================================
 
-$flow-status-archived-color: #7f7f7f;
-$flow-status-start-color: #FF7070;
-$flow-status-progress-color: #fc984b;
-$flow-status-test-color: #2f99ec;
-$flow-status-end-color: #0bc037;
+// ---------- 主色 ----------
+$primary-color: #1d4e89; // 警蓝：按钮、选中、链接
+$primary-dark-color: #163a66; // 深警蓝：悬停、标题条
+$primary-deep-color: #0f2847; // 极深蓝：侧边栏/页头底色
+$primary-light-color: #e9eff7; // 浅蓝：选中背景、标签底
+
+// ---------- 强调 ----------
+$accent-color: #b3261e; // 正红：警示、必填、超期
+$accent-light-color: #fbeceb;
+
+// ---------- 文字 ----------
+$primary-title-color: #16202e; // 标题：近黑蓝
+$primary-text-color: #4a5566; // 正文：深灰蓝
+$secondary-text-color: #7b8698; // 辅助文字
+
+// ---------- 面与线 ----------
+$bg-page: #f2f4f7; // 页面底色
+$bg-panel: #ffffff; // 卡片/面板
+$bg-subtle: #f7f9fc; // 表头、隔行
+$border-color: #d5dce6; // 常规描边
+$border-strong-color: #b9c3d1; // 强描边（表格外框）
+
+// ---------- 流程状态 ----------
+$flow-status-archived-color: #7a8494; // 已归档：灰
+$flow-status-start-color: #b3261e; // 待开始：红
+$flow-status-progress-color: #b26a00; // 进行中：琥珀
+$flow-status-test-color: #1d4e89; // 待验收：蓝
+$flow-status-end-color: #2f7d4f; // 已完成：深绿

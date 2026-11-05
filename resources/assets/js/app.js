@@ -67,8 +67,8 @@ const router = new VueRouter({
 
 // 进度条配置
 ViewUI.LoadingBar.config({
-    color: '#3fcc25',
-    failedColor: '#ff0000'
+    color: '#1d4e89',
+    failedColor: '#c0392b'
 });
 router.beforeEach((to, from, next) => {
     ViewUI.LoadingBar.start();
