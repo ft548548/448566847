@@ -13,6 +13,7 @@ use App\Services\IdentityProvider;
 use App\Services\PlatformResponse;
 use App\Services\WorkshopSession;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 实训平台对外接口 v1（/api/v1/workshop/*）
@@ -41,6 +42,19 @@ class WorkshopController extends AbstractController
     {
         $redirect = $this->safeRedirect((string) $request->query('redirect', '/'));
         $provider = new IdentityProvider();
+
+        // mock 只允许在本地/测试环境（理由见 oauthCallback）。放在生成 state 之前，
+        // 免得被拦下时还在缓存里留一条 10 分钟的空授权记录。
+        if ($provider->isMock() && !$provider->isMockAllowed()) {
+            Log::error('[sso] mock mode blocked outside allowed environments', [
+                'env' => app()->environment(),
+            ]);
+            return $this->ssoFailure(
+                'SSO_NOT_CONFIGURED',
+                '统一身份未配置，暂不能登录，请联系管理员',
+                503
+            );
+        }
 
         $pkce = $provider->pkcePair();
         $state = WorkshopSession::putState([
@@ -74,50 +88,81 @@ class WorkshopController extends AbstractController
     {
         $state = trim((string) $request->query('state', ''));
         $code = trim((string) $request->query('code', ''));
+        $error = trim((string) $request->query('error', ''));
+
+        // ① 身份中心拒绝授权（用户在授权页点「取消」，或 client_id / redirect_uri 不被接受）。
+        //    RFC 6749 §4.1.2.1：此时回跳带 error、不带 code。必须先判它——
+        //    否则会被下面的 code 判空截住，把「用户主动取消」误报成「缺少授权码」，
+        //    于是用户看到一条技术故障，运维收到一个不存在的告警。
+        if ($error !== '') {
+            // state 仍然一次性消费掉，避免被重放；但不参与判定：
+            // 用户已明确终止授权，此刻再抛「state 失效」只会让人更困惑。
+            WorkshopSession::pullState($state);
+            Log::info('[sso] authorize rejected', ['error' => $error]);
+
+            return $this->ssoFailure(
+                $error === 'access_denied' ? 'ACCESS_DENIED' : 'AUTHORIZE_REJECTED',
+                $error === 'access_denied' ? '已取消登录' : '身份中心拒绝了本次授权',
+                400,
+                ['upstream' => $error]
+            );
+        }
 
         $stored = WorkshopSession::pullState($state);
         if (!$stored) {
             // state 不匹配即中止：可能是 CSRF 或过期的授权请求
-            return PlatformResponse::fail(
-                PlatformResponse::VALIDATION_ERROR,
-                '授权状态校验失败，请重新登录',
-                ['reason' => 'STATE_INVALID'],
-                400
-            );
+            return $this->ssoFailure('STATE_INVALID', '授权状态校验失败，请重新登录', 400);
         }
 
         if ($code === '') {
-            return PlatformResponse::fail(
-                PlatformResponse::VALIDATION_ERROR,
-                '缺少授权码 code',
-                ['reason' => 'CODE_MISSING'],
-                400
-            );
+            return $this->ssoFailure('CODE_MISSING', '缺少授权码 code', 400);
         }
 
         $provider = new IdentityProvider();
 
         if ($provider->isMock()) {
+            // mock 只允许在本地/测试环境。生产若误留 SSO_MODE=mock，
+            // 任何人访问 auth/login 都会拿到一个"演示身份"的会话——
+            // 一旦有人把 SSO_MOCK_SUB 配成数字（如 1），那就是一个免密登录后门。
+            // 因此这里 fail closed：宁可登录不可用，也不接受假身份。
+            if (!$provider->isMockAllowed()) {
+                Log::error('[sso] mock mode blocked outside allowed environments', [
+                    'env' => app()->environment(),
+                ]);
+                return $this->ssoFailure(
+                    'SSO_NOT_CONFIGURED',
+                    '统一身份未配置，暂不能登录，请联系管理员',
+                    503
+                );
+            }
             $profile = $provider->mockProfile();
         } else {
             $token = $provider->exchangeCode($code, (string) ($stored['verifier'] ?? ''));
             if (!$token['ok']) {
-                return PlatformResponse::fail(
-                    PlatformResponse::AUTH_REQUIRED,
-                    '授权码换取令牌失败，请重新登录',
-                    ['reason' => 'TOKEN_EXCHANGE_FAILED', 'error' => $token['error']],
-                    401
-                );
+                // 区分「够不着」与「被拒绝」：前者是网络/平台故障(503)，后者是
+                // 凭据或授权码问题(401)。混成一个码，运维会把 invalid_client
+                // 当网络抖动反复重试，永远修不好。
+                $unreachable = $token['error'] === 'token_endpoint_unreachable'
+                    || (int) ($token['status'] ?? 0) >= 500;
+
+                return $unreachable
+                    ? $this->ssoFailure('TOKEN_ENDPOINT_UNREACHABLE', '身份中心暂时不可用，请稍后重试', 503, ['error' => $token['error']])
+                    : $this->ssoFailure('TOKEN_EXCHANGE_FAILED', '授权码换取令牌失败，请重新登录', 401, ['error' => $token['error']]);
             }
 
             $userinfo = $provider->userinfo($token['accessToken']);
             if (!$userinfo['ok']) {
                 // 不降级放行：宁可登录失败，也不产生无法对账的临时身份
-                return PlatformResponse::fail(
-                    PlatformResponse::SERVICE_UNAVAILABLE,
-                    '身份中心返回的用户信息不完整，请稍后重试',
-                    ['reason' => 'USERINFO_INVALID'],
-                    503
+                $unreachable = $userinfo['error'] === 'userinfo_unreachable'
+                    || (int) ($userinfo['status'] ?? 0) >= 500;
+
+                return $this->ssoFailure(
+                    $unreachable ? 'USERINFO_UNREACHABLE' : 'USERINFO_INVALID',
+                    $unreachable
+                        ? '身份中心暂时不可用，请稍后重试'
+                        : '身份中心返回的用户信息不完整，请联系管理员',
+                    503,
+                    ['error' => $userinfo['error']]
                 );
             }
             $profile = $userinfo['profile'];
@@ -127,7 +172,14 @@ class WorkshopController extends AbstractController
         $result = $binder->bindOrCreate(GatewayIdentity::issuer(), (string) $profile['subject'], $profile);
 
         if (!$result['ok']) {
-            return PlatformResponse::fail($result['code'], $result['message'], [], null);
+            // 绑定失败最常见的原因是 uid 不合规（R1/R2）。必须原样暴露 reason：
+            // 否则会被当成「登录超时」反复重试，而它重试一万次也不会成功。
+            return $this->ssoFailure(
+                'BIND_FAILED',
+                (string) $result['message'],
+                400,
+                ['code' => (string) $result['code']]
+            );
         }
 
         /** @var User $user */
@@ -505,7 +557,8 @@ class WorkshopController extends AbstractController
             'cache' => $this->checkCache(),
         ];
 
-        $ssoMode = (new IdentityProvider())->mode();
+        $ssoProvider = new IdentityProvider();
+        $ssoMode = $ssoProvider->mode();
         $examMock = $this->mockFlag('platform.exam.mock', 'platform.exam.base_url');
         $showcaseMock = $this->mockFlag('platform.showcase.mock', 'platform.showcase.base_url');
 
@@ -537,6 +590,14 @@ class WorkshopController extends AbstractController
             // 便于联调核对"本地通了线上不通"的差异
             'capabilities' => [
                 'ssoMode' => $ssoMode,
+                // 三项都齐才可能换码成功。只报布尔值，绝不回显 client_secret 本身，
+                // 连长度都不报——health 是公开路径。
+                'ssoConfigured' => (string) config('platform.sso.client_id', '') !== ''
+                    && (string) config('platform.sso.client_secret', '') !== ''
+                    && (string) config('platform.sso.base_url', '') !== '',
+                // mock 在当前环境是否被允许：ssoMode=mock 且此值为 false 时，
+                // 登录会被直接拒绝（fail closed），这里提前暴露便于排查"为什么登录不通"
+                'ssoMockAllowed' => $ssoProvider->isMockAllowed(),
                 'examMock' => $examMock,
                 'showcaseMock' => $showcaseMock,
                 'signVerify' => $this->boolConfig('platform.gateway.verify_sign', true),
@@ -777,6 +838,192 @@ class WorkshopController extends AbstractController
      * @param string $redirect
      * @return string
      */
+    /**
+     * 登录失败原因 → 面向用户的文案
+     *
+     * 只做查表，不拼接任何请求参数：错误页永不回显用户可控内容，
+     * 因此不存在反射型 XSS 面（连转义都不依赖）。
+     */
+    private const SSO_ERROR_MESSAGES = [
+        'ACCESS_DENIED' => '你已取消登录。如需继续，请重新发起登录。',
+        'AUTHORIZE_REJECTED' => '身份中心拒绝了本次授权，请联系管理员核对客户端配置。',
+        'STATE_INVALID' => '本次登录已超时或校验失败，请重新发起登录。',
+        'CODE_MISSING' => '身份中心未返回授权码，请重新发起登录。',
+        'TOKEN_ENDPOINT_UNREACHABLE' => '身份中心暂时无法访问，请稍后重试。',
+        'TOKEN_EXCHANGE_FAILED' => '授权码校验未通过（可能已过期），请重新发起登录。',
+        'USERINFO_UNREACHABLE' => '身份中心暂时无法访问，请稍后重试。',
+        'USERINFO_INVALID' => '身份中心未返回有效的用户标识，请联系管理员。',
+        'BIND_FAILED' => '账号与论坛身份绑定失败，请联系管理员。',
+        'SSO_NOT_CONFIGURED' => '统一身份尚未配置，暂不能通过该方式登录，请联系管理员。',
+    ];
+
+    /** 属于「服务端暂时不可用」的原因：错误页回 503，便于监控与告警区分 */
+    private const SSO_ERROR_SERVICE_DOWN = [
+        'TOKEN_ENDPOINT_UNREACHABLE',
+        'USERINFO_UNREACHABLE',
+        'SSO_NOT_CONFIGURED',
+    ];
+
+    /**
+     * 登录失败落地页
+     *
+     * GET /api/v1/workshop/auth/login-failed?reason=...
+     *
+     * 独立成页而不是跳首页：首页收到 ?reason= 也没人渲染，用户只会看到
+     * 「莫名其妙回到首页、还是没登录」，比明确报错更糟。
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function loginFailed(Request $request)
+    {
+        $reason = (string) $request->query('reason', '');
+        $known = array_key_exists($reason, self::SSO_ERROR_MESSAGES);
+        $message = $known ? self::SSO_ERROR_MESSAGES[$reason] : '登录未完成，请重新发起登录。';
+        $status = in_array($reason, self::SSO_ERROR_SERVICE_DOWN, true) ? 503 : 400;
+
+        $retry = e(url('/api/v1/workshop/auth/login'));
+        $home = e(url('/'));
+        $reasonText = e($known ? $reason : 'UNKNOWN');
+        $messageText = e($message);
+
+        $html = <<<HTML
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录未完成</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: #f5f6f8; color: #1f2329;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 460px; background: #fff; border-radius: 14px;
+    padding: 32px 28px; box-shadow: 0 8px 28px rgba(15, 23, 42, .08);
+  }
+  .badge {
+    display: inline-block; font-size: 12px; letter-spacing: .04em; color: #5b6472;
+    background: #eef1f5; border-radius: 999px; padding: 4px 10px; margin-bottom: 14px;
+  }
+  h1 { font-size: 20px; margin: 0 0 12px; font-weight: 600; }
+  .msg { font-size: 15px; line-height: 1.7; margin: 0 0 14px; color: #33383f; }
+  .code { font-size: 13px; margin: 0 0 22px; color: #6b7280; }
+  .code code {
+    background: #f2f4f7; border-radius: 6px; padding: 2px 7px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #42474e;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn {
+    flex: 1 1 auto; min-width: 132px; text-align: center; text-decoration: none;
+    border: 1px solid #d5dae2; border-radius: 9px; padding: 11px 16px;
+    font-size: 14px; color: #2b3038; background: #fff;
+  }
+  .btn.primary { background: #2f6fed; border-color: #2f6fed; color: #fff; font-weight: 500; }
+  .hint { margin: 20px 0 0; font-size: 12px; line-height: 1.6; color: #8a929e; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16181d; color: #e6e8ec; }
+    .card { background: #1e2127; box-shadow: none; border: 1px solid #2b2f38; }
+    .badge { background: #262a32; color: #a6adba; }
+    .msg { color: #d3d7de; }
+    .code { color: #9aa1ad; }
+    .code code { background: #262a32; color: #cfd4dc; }
+    .btn { background: #23262d; border-color: #333843; color: #dfe3ea; }
+    .btn.primary { background: #3b76ef; border-color: #3b76ef; color: #fff; }
+    .hint { color: #848c99; }
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <span class="badge">统一身份登录</span>
+    <h1>登录未完成</h1>
+    <p class="msg">{$messageText}</p>
+    <p class="code">错误码：<code>{$reasonText}</code></p>
+    <div class="actions">
+      <a class="btn primary" href="{$retry}">重新登录</a>
+      <a class="btn" href="{$home}">返回首页</a>
+    </div>
+    <p class="hint">如反复失败，请把上面的错误码告知管理员。</p>
+  </main>
+</body>
+</html>
+HTML;
+
+        return response($html, $status)->header('Content-Type', 'text/html; charset=UTF-8');
+    }
+
+    /**
+     * 统一登录失败出口
+     *
+     * 浏览器（Accept 含 text/html）→ 302 到错误落地页，不把裸 JSON 甩给用户；
+     * 其他客户端（curl / 脚本 / 默认 `*​/*`）→ 保持原 JSON 信封，不破坏既有联调脚本。
+     *
+     * @param string $reason
+     * @param string $message
+     * @param int $status
+     * @param array $extra 仅用于 JSON 分支，跳转时一律丢弃（避免把上游原文反射进 URL）
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    private function ssoFailure(string $reason, string $message, int $status, array $extra = [])
+    {
+        if ($this->prefersHtml()) {
+            $query = http_build_query(['reason' => $reason], '', '&', PHP_QUERY_RFC3986);
+            return redirect('/api/v1/workshop/auth/login-failed?' . $query);
+        }
+
+        return PlatformResponse::fail(
+            $this->codeForStatus($status),
+            $message,
+            array_merge(['reason' => $reason], $extra),
+            $status
+        );
+    }
+
+    /**
+     * 是否按浏览器处理
+     *
+     * 只有显式声明 text/html 才走页面跳转。curl 默认发 `*​/*`，仍拿 JSON，
+     * 所以既有的联调脚本、探针、监控探活都不受影响。
+     *
+     * @return bool
+     */
+    private function prefersHtml(): bool
+    {
+        if (strtolower((string) request()->query('format', '')) === 'json') {
+            return false;
+        }
+
+        $accept = strtolower((string) request()->headers->get('Accept', ''));
+        return strpos($accept, 'text/html') !== false;
+    }
+
+    /**
+     * HTTP 状态 → 规范业务码
+     *
+     * @param int $status
+     * @return string
+     */
+    private function codeForStatus(int $status): string
+    {
+        switch ($status) {
+            case 401:
+                return PlatformResponse::AUTH_REQUIRED;
+            case 403:
+                return PlatformResponse::FORBIDDEN;
+            case 404:
+                return PlatformResponse::NOT_FOUND;
+            case 503:
+                return PlatformResponse::SERVICE_UNAVAILABLE;
+            default:
+                return PlatformResponse::VALIDATION_ERROR;
+        }
+    }
+
     private function safeRedirect(string $redirect): string
     {
         $redirect = trim($redirect);

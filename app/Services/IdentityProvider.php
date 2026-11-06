@@ -39,6 +39,29 @@ class IdentityProvider
     }
 
     /**
+     * mock 模式是否被允许在当前环境生效
+     *
+     * 只有 local / testing 默认允许（见 platform.sso.mock_envs）。
+     * 生产若漏配 SSO_* 会静默落到 mock，而 mock 会凭空造出一个身份——
+     * 一旦 SSO_MOCK_SUB 被配成数字，就等于一个免密登录后门。
+     * 因此调用方必须在建会话前先问这一句，不允许时直接拒绝登录。
+     *
+     * @return bool
+     */
+    public function isMockAllowed(): bool
+    {
+        $allowed = (string) config('platform.sso.mock_envs', 'local,testing');
+        $environments = array_filter(array_map('trim', explode(',', $allowed)), 'strlen');
+
+        // 显式留空视为"任何环境都不允许"：宁可登录不可用，也不接受假身份
+        if (!$environments) {
+            return false;
+        }
+
+        return in_array(app()->environment(), $environments, true);
+    }
+
+    /**
      * 生成 PKCE 对
      *
      * @return array{verifier:string,challenge:string}
@@ -107,7 +130,7 @@ class IdentityProvider
                 ->post($this->endpoint('token_path', '/oauth/token'), $payload);
         } catch (\Throwable $e) {
             Log::error('[sso] token exchange failed: ' . $e->getMessage());
-            return ['ok' => false, 'accessToken' => '', 'refreshToken' => '', 'expiresIn' => 0, 'error' => 'token_endpoint_unreachable'];
+            return ['ok' => false, 'accessToken' => '', 'refreshToken' => '', 'expiresIn' => 0, 'error' => 'token_endpoint_unreachable', 'status' => 0];
         }
 
         $body = $response->json();
@@ -119,6 +142,8 @@ class IdentityProvider
                 'refreshToken' => '',
                 'expiresIn' => 0,
                 'error' => (string) ($body['error'] ?? 'invalid_grant'),
+                // 上游 HTTP 状态：调用方据此区分「5xx 不可用」与「4xx 被拒绝」
+                'status' => $response->status(),
             ];
         }
 
@@ -128,6 +153,7 @@ class IdentityProvider
             'refreshToken' => (string) ($body['refresh_token'] ?? ''),
             'expiresIn' => (int) ($body['expires_in'] ?? 7200),
             'error' => '',
+            'status' => $response->status(),
         ];
     }
 
@@ -148,17 +174,18 @@ class IdentityProvider
                 ->get($this->endpoint('userinfo_path', '/oauth/userinfo'));
         } catch (\Throwable $e) {
             Log::error('[sso] userinfo failed: ' . $e->getMessage());
-            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_unreachable'];
+            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_unreachable', 'status' => 0];
         }
 
         $body = $response->json();
+        $upstreamStatus = $response->status();
         if (!is_array($body)) {
-            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_invalid'];
+            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_invalid', 'status' => $upstreamStatus];
         }
 
         $data = $body['data'] ?? $body;
         if (!is_array($data)) {
-            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_invalid'];
+            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_invalid', 'status' => $upstreamStatus];
         }
 
         // 兼容 sub / userId 两种写法；sub 优先（§4.1.1）
@@ -166,7 +193,7 @@ class IdentityProvider
         if ($subject === '') {
             // 不降级放行：临时 ID 会产生一批无法与论坛对账的脏数据
             Log::error('[sso] userinfo missing sub/userId');
-            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_missing_subject'];
+            return ['ok' => false, 'profile' => [], 'error' => 'userinfo_missing_subject', 'status' => $upstreamStatus];
         }
 
         $roles = $data['roles'] ?? $data['role'] ?? [];
@@ -185,6 +212,7 @@ class IdentityProvider
                 'roles' => GatewayIdentity::normalizeRoles($roles),
             ],
             'error' => '',
+            'status' => $upstreamStatus,
         ];
     }
 

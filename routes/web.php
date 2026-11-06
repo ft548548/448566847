@@ -38,6 +38,8 @@ Route::prefix('api/v1/workshop')->middleware(['webapi', 'platform.contract', 'ga
     // —— 身份（公开，§5.4 白名单）——
     Route::get('auth/login',              [WorkshopController::class, 'login']);
     Route::get('auth/oauth/callback',     [WorkshopController::class, 'oauthCallback']);
+    // 登录失败落地页：浏览器流程里不能把裸 JSON 甩给用户，错误一律 302 到这里
+    Route::get('auth/login-failed',       [WorkshopController::class, 'loginFailed']);
     Route::get('auth/logged-out',         [WorkshopController::class, 'loggedOut']);
     // 论坛账号确认（密码代验）：用户尚未登录，必须公开；安全由 L2 出站签名与失败节流保证
     Route::post('auth/forum-verify',      [WorkshopController::class, 'forumVerify']);

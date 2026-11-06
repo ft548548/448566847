@@ -45,6 +45,10 @@ return [
         'userinfo_path' => env('SSO_USERINFO_PATH', '/oauth/userinfo'),
         'logout_path' => env('SSO_LOGOUT_PATH', '/protocol/logout'),
         'discovery_path' => env('SSO_DISCOVERY_PATH', '/.well-known/openid-configuration'),
+        // mock 只在这些环境生效。生产漏配 SSO_* 会静默落到 mock，
+        // 而 mock 会凭空造出一个身份（若 SSO_MOCK_SUB 被配成数字就是免密后门），
+        // 故默认只放 local/testing；显式留空 = 任何环境都不允许。
+        'mock_envs' => env('SSO_MOCK_ENVS', 'local,testing'),
         // mock 模式的演示身份：sub 必须是"看起来像论坛 sub"的字符串，禁止用数字主键
         'mock_sub' => env('SSO_MOCK_SUB', 'usr_mock_workshop_demo'),
         'mock_email' => env('SSO_MOCK_EMAIL', ''),

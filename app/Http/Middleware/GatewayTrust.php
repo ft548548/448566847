@@ -23,6 +23,7 @@ class GatewayTrust
     private const PUBLIC_PATHS = [
         'api/v1/workshop/auth/login',
         'api/v1/workshop/auth/oauth/callback',
+        'api/v1/workshop/auth/login-failed',
         'api/v1/workshop/auth/forum-verify',
         'api/v1/workshop/auth/logged-out',
         'api/v1/workshop/health',
