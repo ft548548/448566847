@@ -64,6 +64,10 @@ class PlatformContract
         $requestId = $this->resolveRequestId($request);
         $appCode = trim((string) $request->headers->get(self::HEADER_APP_CODE, ''));
 
+        // 供 v1 控制器在构造信封时复用同一个追踪号（响应体 requestId 与响应头必须同值）
+        $request->attributes->set('platform.request_id', $requestId);
+        $request->attributes->set('platform.app_code', $appCode);
+
         // 规范 §8.1：X-App-Code 若给出，必须是五平台编码之一。
         // 存量客户端从不发送该头，因此这条分支不会影响现有功能。
         if ($appCode !== '' && !in_array($appCode, self::PLATFORM_CODES, true)) {

@@ -12,10 +12,14 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 32px 0;
+        padding: 32px 16px;
         width: 100%;
         max-height: 100%;
         overflow: auto;
+        // 项目未设置全局 border-box，此处必须显式声明：
+        // 否则 width:100% 与左右 padding 叠加会让容器宽出视口，
+        // 窄屏下卡片、标题、验证码右侧被裁切。
+        box-sizing: border-box;
         .login-logo {
             flex-shrink: 0;
             width: 68px;
@@ -27,8 +31,10 @@
             }
         }
         .login-box {
-            margin-top: 32px;
+            margin-top: 28px;
             width: 400px;
+            max-width: 100%;
+            box-sizing: border-box; // 含 border-top 3px，避免窄屏下横向多出 3px
             border-radius: 12px;
             background-color: #ffffff;
             box-shadow: 0 0 10px #e6ecfa;
@@ -37,6 +43,7 @@
                 font-weight: 600;
                 text-align: center;
                 margin-top: 36px;
+                padding: 0 24px;
             }
             .login-subtitle {
                 font-size: 14px;
@@ -46,9 +53,9 @@
                 color: #AAAAAA;
             }
             .login-input {
-                margin: 32px 40px;
-                > * {
-                    margin-top: 26px;
+                margin: 26px 40px 34px;
+                > * + * {
+                    margin-top: 16px;
                 }
                 .ivu-input {
                     border-color: #f1f1f1;
@@ -79,9 +86,6 @@
                         }
                     }
                 }
-                .login-switch {
-                    color: #aaaaaa;
-                }
                 .login-input-tips-box{
                     position: relative;
                     .login-input-tips{
@@ -98,13 +102,137 @@
                         width: 100%;
                     }
                 }
+
+                // ---------- 字段组：标签在上，控件在下 ----------
+                // 参照 GitHub 新版登录页的双列节奏，仅重排纵向顺序，
+                // 不改变任何 Input 的绑定、校验与事件。
+                .login-field {
+                    .login-label {
+                        display: flex;
+                        align-items: baseline;
+                        justify-content: space-between;
+                        margin-bottom: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        line-height: 20px;
+                        letter-spacing: 0.5px;
+                        color: $primary-title-color;
+                    }
+                    .login-label-extra {
+                        flex-shrink: 0;
+                        padding-left: 12px;
+                        font-size: 13px;
+                        font-weight: 400;
+                        letter-spacing: 0;
+                        color: $primary-color;
+                        &:hover {
+                            color: $primary-dark-color;
+                            text-decoration: underline;
+                        }
+                    }
+                }
+
+                // ---------- 主操作 ----------
+                .login-submit {
+                    margin-top: 24px;
+                }
+
+                // ---------- 第三方登录占位区 ----------
+                // 仅展示形态：按钮不带 disabled 属性以免触发浏览器默认灰化，
+                // 由 aria-disabled + 点击提示表达「暂未开放」，
+                // 不绑定任何授权跳转或接口调用。
+                .login-oauth {
+                    .login-divider {
+                        display: flex;
+                        align-items: center;
+                        margin: 20px 0 14px;
+                        font-size: 13px;
+                        color: $secondary-text-color;
+                        &::before,
+                        &::after {
+                            content: "";
+                            flex: 1;
+                            height: 1px;
+                            background-color: $border-color;
+                        }
+                        span {
+                            padding: 0 12px;
+                            line-height: 1;
+                        }
+                    }
+                    .login-oauth-btn {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100%;
+                        height: 40px;
+                        padding: 0 12px;
+                        border: 1px solid $border-color;
+                        border-radius: 2px; // 与 theme-police 的 $radius-control 同值（该变量在其后才定义，此处不可引用）
+                        background-color: #ffffff;
+                        color: $primary-text-color;
+                        font-family: inherit;
+                        font-size: 14px;
+                        line-height: 1;
+                        cursor: pointer;
+                        transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+                        & + .login-oauth-btn {
+                            margin-top: 10px;
+                        }
+                        &:hover {
+                            border-color: $border-strong-color;
+                            background-color: $bg-subtle;
+                            color: $primary-title-color;
+                        }
+                        &:active {
+                            background-color: $primary-light-color;
+                        }
+                        &:focus-visible {
+                            outline: 2px solid rgba(29, 78, 137, 0.35);
+                            outline-offset: 1px;
+                        }
+                        .login-oauth-icon {
+                            flex-shrink: 0;
+                            width: 18px;
+                            height: 18px;
+                            margin-right: 8px;
+                            // Apple 标志在 24 视窗内的实际外接框小于 Google 的满幅方形，
+                            // 同尺寸下观感偏小，单独放大 2px 并收窄间距以对齐视觉重量
+                            &.login-oauth-icon-apple {
+                                width: 20px;
+                                height: 20px;
+                                margin-right: 7px;
+                            }
+                        }
+                    }
+                }
             }
         }
+
+        // ---------- 卡片外底部的账号切换 ----------
+        .login-switch {
+            margin-top: 16px;
+            font-size: 13px;
+            line-height: 20px;
+            text-align: center;
+            color: $secondary-text-color;
+            a {
+                color: $primary-color;
+                &:hover {
+                    color: $primary-dark-color;
+                    text-decoration: underline;
+                }
+            }
+        }
+
         .login-bottom {
-            margin-top: 18px;
+            margin-top: 10px;
             display: flex;
             align-items: center;
+            justify-content: center;
             width: 388px;
+            max-width: 100%;
+            box-sizing: border-box;
             .login-setting {
                 flex-shrink: 0;
                 display: flex;
@@ -137,6 +265,19 @@
                 padding-left: 24px;
                 color: #aaaaaa;
                 text-align: right;
+            }
+        }
+    }
+}
+
+// 窄屏：卡片占满可用宽度，左右留出与页头一致的边距
+@media (max-width: 480px) {
+    .page-login {
+        .login-body {
+            .login-box {
+                .login-input {
+                    margin: 24px 20px 28px;
+                }
             }
         }
     }

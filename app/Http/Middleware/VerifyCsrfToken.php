@@ -12,6 +12,11 @@ class VerifyCsrfToken extends Middleware
      * @var array
      */
     protected $except = [
+        // v1 接口使用独立的服务端会话（workshop_sid）与自建 CSRF 双提交，
+        // 不复用 Laravel session，因此不参与框架级 CSRF 校验。
+        // 校验点见 App\Services\WorkshopSession::verifyCsrf()。
+        'api/v1/workshop/*',
+
         // 上传图片
         'api/system/imgupload/',
 
