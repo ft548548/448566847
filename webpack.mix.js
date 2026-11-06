@@ -1,6 +1,9 @@
 const mix = require('laravel-mix');
 const ipv4 = require('internal-ip').v4.sync();
 const argv = process.argv;
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 
 let mixBuildName = function (str) {
     if (typeof str !== "string") {
@@ -58,4 +61,16 @@ mix
     })
     .vue({
         version: 2,
+    })
+    .then(() => {
+        // 构建完成后刷新 public/js/hash
+        //
+        // main.blade.php 用「?v={版本}-{哈希}」引用 app.js / app.css，而该哈希原先是
+        // 仓库自带的静态文件（2022 年起从未变过）。nginx 对静态资源设了 30 天强缓存，
+        // 哈希不变意味着 URL 不变，浏览器会一直复用旧脚本——即使服务器已换成新文件。
+        // 因此这里把 app.js 的内容哈希写入该文件，保证每次构建都得到新的 URL。
+        const target = path.resolve(__dirname, publicPath, 'js/app.js');
+        const hash = crypto.createHash('md5').update(fs.readFileSync(target)).digest('hex').slice(0, 16);
+        fs.writeFileSync(path.resolve(__dirname, publicPath, 'js/hash'), hash);
+        console.log('  资源哈希已更新: ' + hash);
     });
