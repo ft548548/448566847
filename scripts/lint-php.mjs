@@ -37,7 +37,24 @@ function walk(entry, out = []) {
   return out;
 }
 
+/**
+ * 先确认 PHP 可执行，否则下面每个文件都会"检查失败"，
+ * 报出 218 个失败文件反而掩盖了真正原因（找不到 php）。
+ */
+function assertPhpUsable() {
+  try {
+    execFileSync(PHP_BIN, ["-v"], { stdio: "pipe", encoding: "utf8" });
+  } catch {
+    console.error(`✗ 找不到可执行的 PHP：${PHP_BIN}`);
+    console.error("  PATH 里没有 php 时请显式指定，例如：");
+    console.error("  PHP_BIN=D:/dt-run/php/php.exe npm run lint");
+    process.exit(1);
+  }
+}
+
 function main() {
+  assertPhpUsable();
+
   let files = [];
   for (const target of TARGETS) files = walk(target, files);
   files = [...new Set(files)].sort();

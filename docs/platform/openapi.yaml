@@ -38,6 +38,16 @@ tags:
     description: 文件列表与上传
   - name: 系统
     description: 公共配置
+  - name: 网关接入
+    description: |
+      `/api/v1/workshop/*` 新前缀（规范 §6.1.2 目标形态）。
+      与存量 `/api/{module}/{method}` 并存一个版本；两者共用同一套业务逻辑，
+      差别只有三处：路径风格、HTTP 状态码与 code 成对出现、追加 `message` 别名。
+  - name: 服务间
+    description: |
+      `/api/v1/workshop/internal/*`，仅供其他平台服务端调用。
+      鉴权为 L2 签名（X-App-Key / X-Timestamp / X-Nonce / X-Signature）
+      且必须带 `X-Auth-Mode: service`；不对浏览器开放。
 
 paths:
   /api/users/login:
@@ -216,19 +226,68 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/project/user:
-    get:
+    post:
       tags: [项目]
-      summary: 项目成员列表
+      summary: 项目成员增删（设置完整成员集合）
+      description: |
+        传入的 `userid` 是该项目的**完整成员列表**：列表内的加入，列表外的移除。
+        语义是"设置成员集合"，既不是"新增一个成员"，也不是查询接口。
+        （早期契约把本接口误写为 GET「成员列表」，已按实现修正。）
       operationId: projectUser
       security: [{ TokenAuth: [] }]
-      parameters:
-        - name: project_id
-          in: query
-          required: true
-          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, userid]
+              properties:
+                project_id: { type: integer, description: 项目 ID }
+                userid:
+                  description: 完整成员 userid 列表；也接受逗号分隔字符串，服务端会归一为数组
+                  oneOf:
+                    - type: array
+                      items: { type: integer }
+                    - type: string
+              example:
+                project_id: 12
+                userid: [1, 2, 3]
       responses:
         "200":
-          description: 成员列表
+          description: 操作结果（被移除的成员由服务端计算）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: 成员超过 100 人
+
+  /api/project/submit:
+    post:
+      tags: [项目]
+      summary: 提交项目（仅"已完成"项目可提交）
+      description: |
+        业务规则：项目归档（`archived_at` 非空）即业务语义上的"已完成"，
+        只有已完成项目允许提交。提交结果写入 `submitted_at` / `submitted_userid`，
+        并在项目动态中记录一条「提交项目」。仅项目负责人可操作。
+
+        错误语义：
+        - `-4002` 项目尚未完成（未归档），不能提交
+        - `-4001` 项目已提交，请勿重复提交
+      operationId: projectSubmit
+      security: [{ TokenAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id]
+              properties:
+                project_id: { type: integer }
+      responses:
+        "200":
+          description: 提交结果；`data.submitted_at` 为提交时间
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
@@ -523,6 +582,464 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
 
+  # ======================================================================
+  # v1（网关接入版）—— 《实训平台_统一身份与网关接入说明》V3.0 表 6-2
+  # 与存量 RPC 接口并存；业务逻辑复用，协议层不同。
+  # ======================================================================
+
+  /api/v1/workshop/auth/login:
+    get:
+      tags: [网关接入]
+      summary: 发起统一身份授权（302）
+      description: |
+        生成 state（32 字节随机）并绑会话，10 分钟过期；real 模式 302 到身份中心
+        `/oauth/authorize`（带 PKCE S256），mock 模式 302 到本平台回调以打通时序。
+        公开路径，网关白名单放行并限流（10 次/分钟/IP）。
+      operationId: workshopAuthLogin
+      parameters:
+        - name: redirect
+          in: query
+          description: 登录后的站内回跳路径，必须以 `/` 开头（防开放重定向）
+          schema: { type: string, default: "/" }
+      responses:
+        "302":
+          description: 跳转到身份中心授权页（或 mock 回调）
+          headers:
+            Location:
+              schema: { type: string }
+
+  /api/v1/workshop/auth/oauth/callback:
+    get:
+      tags: [网关接入]
+      summary: 授权回跳（服务端换码 + 建会话）
+      description: |
+        校验 state → 服务端 POST /oauth/token（带 client_secret 与 code_verifier，
+        超时 3 秒且**不重试**）→ GET /oauth/userinfo → 按 sub 绑定本地账号 →
+        建服务端会话 → Set-Cookie → 302 回原页面。
+        浏览器最终只持有 `__Host-workshop_sid`（HTTP 调试时降级为 `workshop_sid`），
+        响应体中不出现任何 token。
+      operationId: workshopAuthCallback
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302":
+          description: 登录成功，回跳到 redirect 指定的站内路径
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: 会话 Cookie，HttpOnly; SameSite=Lax; Path=/
+        "400":
+          description: state 校验失败或缺少 code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "503":
+          description: 身份中心不可用或 userinfo 缺少 sub（不降级放行）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/auth/forum-verify:
+    post:
+      tags: [网关接入]
+      summary: 论坛账号确认登录（密码代验式）
+      description: |
+        用户在本平台输入警院论坛账号与密码，由本平台经统一网关调用
+        `POST /answer/api/v1/account/verify` 做**只读**账号确认；
+        仅当 `data.confirmed === true` 时建立本平台会话。
+
+        与 `auth/login`（OAuth 授权码 + PKCE）是两条独立入口：
+        OAuth 是终态目标（平台全程不接触密码），本接口是过渡方案。
+
+        服务端纪律：
+        - 密码只在本进程内存中透传一次，不落库、不写日志、不回显；
+        - 不重试：签名类失败重试无意义，密码类重试等同撞库；
+        - 渠道故障返回 503 并带 `data.reason=channel_*`，**绝不**报成"账号或密码错误"；
+        - 同一账号 + IP 连续失败达阈值即锁定，响应带 `Retry-After`。
+      operationId: workshopAuthForumVerify
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, pass]
+              properties:
+                login:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: 论坛用户名或邮箱
+                pass:
+                  type: string
+                  minLength: 8
+                  maxLength: 32
+                  writeOnly: true
+                  description: 明文密码，仅用于本次确认
+                login_type:
+                  type: string
+                  enum: [auto, username, email]
+                  default: auto
+                  description: 非法值返回 400，不静默归一为 auto
+            example:
+              login: admin@jspi.edu.cn
+              pass: Admin@12345
+              login_type: auto
+      responses:
+        "200":
+          description: |
+            账号确认通过，已建立本平台会话。`data.userId` 是论坛 `user_id`（跨平台 sub），
+            `data.localUserId` 仅本平台内部使用；mock 模式会额外返回 `data.mock=true`。
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: 会话 Cookie，HttpOnly; SameSite=Lax; Path=/
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: 参数不合法（`data.reason=invalid_params`）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "401":
+          description: |
+            账号确认未通过。`data.reason` 为 `invalid_credentials`（账号不存在与密码错误
+            刻意返回同一结论，防账号枚举）或 `account_unavailable`（停用/删除）。
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "429":
+          description: 失败次数超阈值（`Retry-After` 给出剩余锁定秒数）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "503":
+          description: |
+            渠道故障，**不是**密码错误。`data.reason` 为 `channel_unavailable`（超时/连不上）、
+            `channel_misconfigured`（签名/配置错，`data.gatewayCode` 给出网关原始码）
+            或 `disabled`（通道被关闭）。
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/auth/userinfo:
+    get:
+      tags: [网关接入]
+      summary: 当前身份（字段对齐 sub）
+      description: |
+        `data.userId` 是论坛 sub（字符串），**不是**本地 userid；两者不可互换。
+        本地主键仅通过 `data.localUserId` 暴露给本平台内部使用。
+      operationId: workshopAuthUserinfo
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      responses:
+        "200":
+          description: 身份信息
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+          headers:
+            X-Request-Id:
+              schema: { type: string }
+        "401":
+          description: 未登录（`code=AUTH_REQUIRED`，v1 统一用 401，不再返回 200）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/auth/logout:
+    post:
+      tags: [网关接入]
+      summary: 退出登录
+      description: |
+        先删本地会话，再返回身份中心登出地址（顺序不可颠倒）。
+        会话已失效时同样返回成功（幂等）。
+      operationId: workshopAuthLogout
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: 已退出；`data.logoutUrl` 供前端跳转身份中心
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/auth/logged-out:
+    get:
+      tags: [网关接入]
+      summary: 身份中心登出回跳
+      description: 不依赖登录态；用于 `post_logout_redirect_uri` 落点。
+      operationId: workshopAuthLoggedOut
+      responses:
+        "200":
+          description: 已退出统一身份
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/health:
+    get:
+      tags: [网关接入]
+      summary: 健康检查
+      description: |
+        返回构建版本、时间与依赖状态，以及能力自述（ssoMode / examMock /
+        signVerify / cookieName）。不返回任何密钥、连接串或文件路径。
+        `status=degraded` 表示数据库或缓存不可用。
+      operationId: workshopHealth
+      responses:
+        "200":
+          description: 探活结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/HealthReport" }
+
+  /api/v1/workshop/recruitments/{id}/admission:
+    get:
+      tags: [网关接入]
+      summary: 招募的考试准入校验结果（回源 + 缓存）
+      description: |
+        判定顺序固定：本地投影（≤5 分钟）→ 结果缓存（60 秒）→ 回源考试平台
+        `GET /api/v1/exam/admissions/{subject}/{courseId}`（超时 1.5 秒）。
+        回源超时返回 `reason=pending` 且 **HTTP 200**，绝不判为不合格；
+        `course_id` 为空的招募返回 `required=false`，不触发任何回源。
+      operationId: workshopRecruitmentAdmission
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 招募 ID（本地主键）
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: 准入结论
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Admission" }
+        "401":
+          description: 未登录
+        "403":
+          description: 无 `admission:read` 权限（非发布者、非管理员）
+        "404":
+          description: 招募不存在（含已软删除）
+
+  /api/v1/workshop/projects:
+    get:
+      tags: [网关接入]
+      summary: 项目列表（REST 别名）
+      description: |
+        等价于 `GET /api/project/lists`，但返回值规范为 `{lists,total,page,pagesize}`。
+        自动附加「我是成员」条件，非成员项目不出现。
+      operationId: workshopProjects
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+        - { name: keyword, in: query, schema: { type: string } }
+        - name: archived
+          in: query
+          description: 传 `1` 查已归档（= 已完成）项目
+          schema: { type: string }
+      responses:
+        "200":
+          description: 项目分页
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Page" }
+
+  /api/v1/workshop/projects/{id}:
+    get:
+      tags: [网关接入]
+      summary: 项目详情（REST 别名）
+      description: 等价于 `GET /api/project/one`；非成员访问返回业务拒绝。
+      operationId: workshopProjectOne
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: 项目详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/recruitments:
+    get:
+      tags: [网关接入]
+      summary: 招募列表（REST 别名）
+      description: 等价于 `GET /api/recruitment/lists`，返回规范分页结构。
+      operationId: workshopRecruitments
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: 招募分页
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Page" }
+
+  /api/v1/workshop/recruitments/{id}:
+    get:
+      tags: [网关接入]
+      summary: 招募详情（REST 别名）
+      operationId: workshopRecruitmentOne
+      security: [{ SessionCookie: [] }, { TokenAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: 招募详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/internal/projects/{id}:
+    get:
+      tags: [服务间]
+      summary: 项目摘要（供广场 / 档案 / 考试平台读取）
+      description: |
+        所有对外身份一律用 subject。`ownerSubject=null` 表示该用户尚未绑定统一身份，
+        下游据此跳过而不是拿 userid 顶替（§8.2.2）。
+      operationId: workshopInternalProjectSummary
+      security: [{ GatewaySign: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: 项目摘要
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/ProjectSummary" }
+        "403":
+          description: 非服务态调用或签名无效
+
+  /api/v1/workshop/internal/projects/{id}/work:
+    get:
+      tags: [服务间]
+      summary: 项目 → 作品草稿（成果广场专用）
+      description: |
+        Work 的权威平台是成果广场，本平台只做映射：项目标题→title、
+        简介→summary、成员 sub→authorSubjects。`unboundMembers` 供广场提示
+        "部分作者未绑定统一身份"。
+      operationId: workshopInternalProjectWork
+      security: [{ GatewaySign: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: 作品草稿
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Work" }
+
+  /api/v1/workshop/internal/projects/{id}/members:
+    get:
+      tags: [服务间]
+      summary: 项目成员与 sub 映射（成长档案专用）
+      operationId: workshopInternalProjectMembers
+      security: [{ GatewaySign: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: 成员列表；未绑定成员 `subject=null` 且 `unbound=true`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/v1/workshop/internal/projects/{id}/publish:
+    post:
+      tags: [服务间]
+      summary: 把项目推送到成果广场（占位实现）
+      description: |
+        本平台只做映射与出站调用，不判定"作品是否合格"。广场不可用时返回
+        `SERVICE_UNAVAILABLE`，不影响项目本身的任何状态。
+        需要 `Idempotency-Key`；未配置 `SHOWCASE_BASE_URL` 时返回 `mock=true` 的模拟结果。
+      operationId: workshopInternalPublishWork
+      security: [{ GatewaySign: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 推送结果（`data.workId` 为广场返回的作品 ID）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: 缺少或非法的 Idempotency-Key
+        "409":
+          description: 成员均未绑定统一身份，无法作为作者推送
+
+  /api/v1/workshop/internal/events:
+    post:
+      tags: [服务间]
+      summary: 接收考试平台事件（exam.passed / exam.failed）
+      description: |
+        封套 10 个必填字段任一缺失即拒收（HTTP 400 + `data.missing`）；
+        `eventId` 幂等，重复投递返回 `duplicated=true`；
+        同一 `Idempotency-Key` 重放直接回放首次结果（`idempotentReplay=true`）。
+        消费成功后 upsert 准入投影并失效准入缓存。
+      operationId: workshopInternalEvents
+      security: [{ GatewaySign: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventEnvelope" }
+      responses:
+        "200":
+          description: 已接收或幂等命中
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: 封套不完整、事件类型不在目录内或版本不支持
+
 components:
   securitySchemes:
     TokenAuth:
@@ -530,6 +1047,26 @@ components:
       in: header
       name: token
       description: DooTask 既有会话令牌（非 OIDC Access Token，见 DV-01）
+
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: workshop_sid
+      description: |
+        v1 服务端会话。HTTPS 部署时名为 `__Host-workshop_sid`（强制 Secure、Path=/、
+        无 Domain）。令牌只存在于服务端 Redis，浏览器侧不可读取。
+
+    GatewaySign:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: |
+        服务间 L2 签名：`hex(HMAC-SHA256(app_secret, method \n path \n query \n body))`。
+        同一请求还须带 `X-App-Key`、`X-Timestamp`（±300 秒）、`X-Nonce`（窗口内不复用）、
+        `X-App-Code` 与 `X-Auth-Mode: service`。
+        本平台侧入站另有网关注入的可信头签名 `X-Internal-Sign`，
+        规范化串为 `X-User-Id \n X-User-Role \n X-Client-Id \n X-Token-Exp \n
+        X-Request-Id \n X-Auth-Mode \n X-Timestamp`，顺序固定不可调整。
 
   parameters:
     Page:
@@ -557,6 +1094,25 @@ components:
       schema:
         type: string
         enum: [forum, learning, exam, workshop, showcase]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        写操作幂等键，建议 UUID v4，8~128 位 `[A-Za-z0-9._:-]`。
+        作用域绑定调用者身份（`auth:idem:{subject}:{key}`），仅缓存 2xx 结果；
+        成功 TTL 24 小时，处理中占位 60 秒。
+      schema: { type: string, pattern: "^[A-Za-z0-9._:-]{8,128}$" }
+    PageNumber:
+      name: page
+      in: query
+      description: v1 分页页码（从 1 开始）
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSizeCamel:
+      name: pageSize
+      in: query
+      description: v1 每页条数；未传时按接口默认值，超上限截断不报错
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
 
   schemas:
     Envelope:
@@ -606,3 +1162,175 @@ components:
         - BUSINESS_ERROR
         - SERVICE_UNAVAILABLE
         - INTERNAL_ERROR
+
+    # ==================================================================
+    # v1 共享实体（《统一身份与网关接入说明》V3.0 §6.9）
+    # ==================================================================
+
+    Page:
+      type: object
+      description: |
+        v1 统一分页结构。存量 RPC 接口返回的是 Laravel 原生分页
+        （`current_page` / `per_page` / `data` / `links`），v1 由适配层转换，
+        接入方只需认这四个字段。
+      required: [lists, total, page, pagesize]
+      properties:
+        lists:
+          type: array
+          description: 当前页数据
+          items: { type: object, additionalProperties: true }
+        total: { type: integer, description: 总条数 }
+        page: { type: integer, description: 当前页码，从 1 开始 }
+        pagesize: { type: integer, description: 每页条数（服务端截断后的实际值） }
+
+    HealthReport:
+      type: object
+      description: 健康检查报告；不包含任何密钥、连接串或文件路径
+      required: [status, service, version, checks, time]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: 数据库或缓存不可用时为 degraded
+        service: { type: string, example: workshop }
+        name: { type: string, example: 警务实训平台 }
+        version: { type: string, description: 构建版本（APP_VERSION） }
+        buildTime: { type: string, description: 构建时间，未注入时为空串 }
+        capabilities:
+          type: object
+          description: 能力自述，便于联调识别"本地通了线上不通"
+          properties:
+            ssoMode: { type: string, enum: [mock, real] }
+            examMock: { type: boolean, description: 未配置 EXAM_BASE_URL 时为 true }
+            showcaseMock: { type: boolean }
+            signVerify: { type: boolean, description: 是否启用可信头验签 }
+            cookieName: { type: string, example: workshop_sid }
+            secureCookie: { type: boolean }
+            idempotency: { type: boolean }
+        checks:
+          type: object
+          properties:
+            database: { type: string, enum: [ok, down] }
+            cache: { type: string, enum: [ok, degraded] }
+        time: { type: string, format: date-time }
+        timestamp: { type: integer, description: 秒级时间戳 }
+
+    Admission:
+      type: object
+      description: |
+        准入结论。`reason` 是契约的一部分，下游不得自写第二套文案映射。
+        超时不是不合格：`pending` 与 `prerequisite_missing` 必须区分，前端文案也不同。
+      required: [recruitmentId, courseId, required, eligible, reason, source, checkedAt]
+      properties:
+        recruitmentId: { type: integer }
+        courseId: { type: string, description: 原值存储；空表示该招募不校验准入 }
+        subject: { type: string, description: 论坛 sub 原值；未绑定时缺省 }
+        required: { type: boolean, description: false 表示未绑定课程，未触发回源 }
+        eligible: { type: boolean }
+        reason:
+          type: string
+          enum:
+            [passed, not_started, failed, violation, pending, prerequisite_missing, not_required]
+          description: |
+            前 6 个与考试平台枚举一致；`not_required` 为本平台扩展，
+            仅当 `required=false` 时出现。
+        reasonText: { type: string, description: 面向用户的提示，服务端统一生成 }
+        score: { type: integer, nullable: true, description: 成绩，仅展示，不落业务表 }
+        ruleVersion: { type: string, description: 规则版本，供下游复算 }
+        source:
+          type: string
+          enum: [remote, cache, projection, mock, local]
+          description: 结论来源；projection 与 cache 只加速，不作为拒绝依据
+        cached: { type: boolean }
+        checkedAt: { type: string, format: date-time }
+        mock: { type: boolean, description: true 表示演示数据，不得当作真实回源结论 }
+
+    ProjectSummary:
+      type: object
+      description: 项目摘要（服务间）；对外身份一律为 subject
+      properties:
+        projectId: { type: integer }
+        name: { type: string }
+        summary: { type: string, description: 纯文本摘要，最长 500 字符 }
+        status:
+          type: string
+          enum: [in_progress, completed, submitted]
+          description: 本平台语义：归档即 completed；提交为独立动作
+        ownerSubject: { type: string, nullable: true, description: 未绑定时为 null }
+        memberCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        submittedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+        sourcePlatform: { type: string, enum: [workshop] }
+
+    Work:
+      type: object
+      description: |
+        作品草稿。Work 的权威平台是成果广场（showcase），本平台只做映射，
+        不持有该实体，也不判定作品是否合格。
+      properties:
+        workId: { type: string, nullable: true, description: 发布前为 null，由广场回填 }
+        sourcePlatform: { type: string, enum: [workshop] }
+        sourceEntityId: { type: string, example: project_12 }
+        title: { type: string }
+        summary: { type: string }
+        coverUrl: { type: string, nullable: true }
+        authorSubjects:
+          type: array
+          description: 已绑定统一身份的成员 sub；未绑定成员不在此列
+          items: { type: string }
+        tags: { type: array, items: { type: string } }
+        status: { type: string, enum: [draft, published, withdrawn] }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        memberCount: { type: integer }
+        unboundMembers: { type: integer, description: 未绑定 sub 的成员数 }
+
+    EventEnvelope:
+      type: object
+      description: |
+        事件封套。10 个字段全为必填，任一缺失即拒收并告警——
+        封套不完整的消息一旦入库，后续无法补救（§8.4.2）。
+      required:
+        [
+          eventId,
+          eventType,
+          eventVersion,
+          occurredAt,
+          sourcePlatform,
+          sourceEntityId,
+          actorId,
+          correlationId,
+          requestId,
+          data,
+        ]
+      properties:
+        eventId:
+          type: string
+          description: 全局唯一，消费侧幂等主键
+          example: evt_01j8zq7m2k9x
+        eventType:
+          type: string
+          enum: [exam.passed, exam.failed]
+          description: 必须在目录内（出站 project.* 事件本期不生产，DV-11）
+        eventVersion: { type: string, enum: ["1.0"] }
+        occurredAt:
+          type: string
+          format: date-time
+          description: RFC 3339 UTC（Z），与业务时间的 +08:00 不得混用
+          example: "2026-11-05T14:00:00Z"
+        sourcePlatform: { type: string, enum: [exam] }
+        sourceEntityId: { type: string, example: record_5001 }
+        actorId: { type: string, description: 操作者；系统操作为 system }
+        correlationId: { type: string }
+        requestId: { type: string, description: 生产方追踪号，用于串联 }
+        data:
+          type: object
+          description: 业务载荷，至少含 userId 与 courseId
+          properties:
+            userId: { type: string, description: 论坛 sub 原值 }
+            courseId: { type: string }
+            examId: { type: string, description: 只透传展示，不落库 }
+            passed: { type: boolean }
+            score: { type: integer }
+            ruleVersion: { type: string }

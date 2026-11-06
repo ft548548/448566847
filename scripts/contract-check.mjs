@@ -70,6 +70,32 @@ const MODULE_CONTROLLERS = {
   report: "ReportController",
 };
 
+/**
+ * v1 路径 → [控制器, 方法, HTTP 方法]
+ *
+ * v1 不是 `{module}/{method}` 派发，无法按路径段推导，因此显式登记。
+ * 新增 v1 接口必须同时改三处：路由、控制器、这张表 + openapi.yaml。
+ */
+const V1_ROUTE_MAP = {
+  "/api/v1/workshop/auth/login": ["WorkshopController", "login", "get"],
+  "/api/v1/workshop/auth/oauth/callback": ["WorkshopController", "oauthCallback", "get"],
+  "/api/v1/workshop/auth/forum-verify": ["WorkshopController", "forumVerify", "post"],
+  "/api/v1/workshop/auth/userinfo": ["WorkshopController", "userinfo", "get"],
+  "/api/v1/workshop/auth/logout": ["WorkshopController", "logout", "post"],
+  "/api/v1/workshop/auth/logged-out": ["WorkshopController", "loggedOut", "get"],
+  "/api/v1/workshop/health": ["WorkshopController", "health", "get"],
+  "/api/v1/workshop/recruitments/{id}/admission": ["WorkshopController", "admission", "get"],
+  "/api/v1/workshop/projects": ["WorkshopController", "projects", "get"],
+  "/api/v1/workshop/projects/{id}": ["WorkshopController", "projectOne", "get"],
+  "/api/v1/workshop/recruitments": ["WorkshopController", "recruitments", "get"],
+  "/api/v1/workshop/recruitments/{id}": ["WorkshopController", "recruitmentOne", "get"],
+  "/api/v1/workshop/internal/projects/{id}": ["WorkshopInternalController", "projectSummary", "get"],
+  "/api/v1/workshop/internal/projects/{id}/work": ["WorkshopInternalController", "projectWork", "get"],
+  "/api/v1/workshop/internal/projects/{id}/members": ["WorkshopInternalController", "projectMembers", "get"],
+  "/api/v1/workshop/internal/projects/{id}/publish": ["WorkshopInternalController", "publishWork", "post"],
+  "/api/v1/workshop/internal/events": ["WorkshopInternalController", "receiveEvent", "post"],
+};
+
 let spec = null;
 const openapiRel = "docs/platform/openapi.yaml";
 if (fs.existsSync(path.join(ROOT, openapiRel))) {
@@ -101,6 +127,26 @@ if (spec) {
   };
 
   for (const apiPath of paths) {
+    // v1（网关接入版）：按显式映射表校验，不套用 RPC 路径规则
+    if (apiPath.startsWith("/api/v1/workshop")) {
+      const entry = V1_ROUTE_MAP[apiPath];
+      if (!entry) {
+        errors.push(`v1 路径未在 V1_ROUTE_MAP 登记：${apiPath}`);
+        continue;
+      }
+      const [controller, method, httpMethod] = entry;
+      const declared = Object.keys(spec.paths[apiPath]);
+      expect(
+        declared.includes(httpMethod),
+        `${apiPath} 在 openapi.yaml 中声明为 ${declared.join("/")}，与 V1_ROUTE_MAP 的 ${httpMethod} 不一致`,
+      );
+      expect(
+        controllerMethods(controller).has(method),
+        `${apiPath} 在 ${controller} 中找不到方法 ${method}()`,
+      );
+      continue;
+    }
+
     const segments = apiPath.split("/").filter(Boolean); // api, module, method, action?
     if (segments[0] !== "api" || segments.length < 3) {
       errors.push(`路径不符合 /api/{module}/{method} 约定：${apiPath}`);
@@ -117,7 +163,31 @@ if (spec) {
     expect(methods.has(expected), `${apiPath} 在 ${controller} 中找不到方法 ${expected}()`);
   }
 
-  notes.push(`OpenAPI 对账通过：${paths.length} 个 path`);
+  // 反向校验：映射表里的 v1 路径必须都在契约中，避免"代码有、文档无"
+  for (const apiPath of Object.keys(V1_ROUTE_MAP)) {
+    expect(paths.includes(apiPath), `V1_ROUTE_MAP 中的 ${apiPath} 未在 openapi.yaml 声明`);
+  }
+
+  // 契约外方法只提示不阻断：存量有大量内部接口未登记（dialog/report 整模块）
+  const extra = [];
+  for (const [mod, ctrl] of Object.entries(MODULE_CONTROLLERS)) {
+    const declared = new Set();
+    for (const p of paths) {
+      const seg = p.split("/").filter(Boolean);
+      if (seg[1] === mod && seg[2]) declared.add(seg[2] + (seg[3] ? `__${seg[3]}` : ""));
+    }
+    for (const m of controllerMethods(ctrl)) {
+      if (["__construct", "__invoke", "middleware"].includes(m)) continue;
+      if (!declared.has(m)) extra.push(`${mod}/${m.replace("__", "/")}`);
+    }
+  }
+
+  notes.push(`OpenAPI 对账通过：${paths.length} 个 path（其中 v1 ${Object.keys(V1_ROUTE_MAP).length} 个）`);
+  if (extra.length > 0) {
+    notes.push(
+      `契约外方法 ${extra.length} 个（未登记，仅提示）：${extra.slice(0, 10).join(", ")}${extra.length > 10 ? " …" : ""}`,
+    );
+  }
 }
 
 /* 4. 环境变量样例 ------------------------------------------------------ */
