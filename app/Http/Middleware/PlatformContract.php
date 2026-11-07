@@ -29,8 +29,14 @@ class PlatformContract
     public const HEADER_REQUEST_ID = 'X-Request-Id';
     public const HEADER_APP_CODE = 'X-App-Code';
 
-    /** 规范 §8.1：五平台编码，固定集合，不得自造 */
-    public const PLATFORM_CODES = ['forum', 'learning', 'exam', 'workshop', 'showcase'];
+    /**
+     * 规范 §8.1：平台编码固定集合，不得自造
+     *
+     * training 是《三平台对接方案 V2.0》的实训平台编码；workshop 为其旧编码，
+     * 保留在集合内以兼容存量调用方。两者指向同一平台，见 platform.peers.self
+     * 与发现接口返回的 platformAlias。
+     */
+    public const PLATFORM_CODES = ['forum', 'learning', 'exam', 'training', 'workshop', 'showcase'];
 
     /** 规范 §8.1：requestId 允许的字符与长度 */
     private const REQUEST_ID_PATTERN = '/^[A-Za-z0-9._:-]{8,128}$/';
@@ -207,7 +213,7 @@ class PlatformContract
     {
         $body = [
             'ret' => 0,
-            'msg' => '请求头 X-App-Code 非法，只接受 forum/learning/exam/workshop/showcase',
+            'msg' => '请求头 X-App-Code 非法，只接受 forum/learning/exam/training/workshop/showcase',
             'data' => [
                 'reason' => 'APP_CODE_INVALID',
                 'appCode' => $appCode,

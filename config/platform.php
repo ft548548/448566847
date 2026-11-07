@@ -199,6 +199,63 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | 三平台对端通道（《三平台对接方案 V2.0》§5.2 对端层）
+    |--------------------------------------------------------------------------
+    | 与上面的 gateway 段区分：
+    |   gateway  = L2 网关层签名（X-App-Key / X-Signature，平台 ↔ 网关）
+    |   peers    = 对端层签名（X-App-Code / X-Internal-Sign，平台 ↔ 平台）
+    | 两者密钥与算法都不同，不可互换。
+    |
+    | auth_mode：
+    |   none —— 联调期免签，任何请求都放行（仅允许在 local/testing 使用）
+    |   auto —— 通道配了 secret 即强制验签，未配则该通道不可用（fail closed）
+    |
+    | 通道清单同时是访问白名单：未登记的平台一律 403 PEER_NOT_OPEN，
+    | 登记了但路径不匹配的一律 403 PEER_SCOPE_DENIED。
+    */
+    'peers' => [
+        // 本平台在三平台契约中的编码（§5.2：learning / exam / training）
+        'self' => env('PEER_APP_CODE', 'training'),
+        'auth_mode' => env('PEER_AUTH_MODE', 'auto'),
+        // 时间窗（秒），方案 §4.3 规定 ±300
+        'skew' => (int) env('PEER_SKEW', 300),
+        'timeout_ms' => (int) env('PEER_TIMEOUT_MS', 3000),
+        // mock_envs：只有这些环境允许 auth_mode=none
+        'auth_none_envs' => env('PEER_AUTH_NONE_ENVS', 'local,testing'),
+        'channels' => [
+            'learning' => [
+                'enabled' => env('PEER_LEARNING_ENABLED', false),
+                'secret' => env('PEER_LEARNING_SECRET', ''),
+                'base_url' => env('PEER_LEARNING_BASE_URL', ''),
+                'events_path' => env('PEER_LEARNING_EVENTS_PATH', '/api/v1/learning/internal/peers/training/events'),
+            ],
+            'exam' => [
+                'enabled' => env('PEER_EXAM_ENABLED', false),
+                'secret' => env('PEER_EXAM_SECRET', ''),
+                'base_url' => env('PEER_EXAM_BASE_URL', ''),
+                'events_path' => env('PEER_EXAM_EVENTS_PATH', '/api/v1/exam/internal/peers/training/events'),
+            ],
+        ],
+        // 发件箱投递退避（§6.1）：1s→5s→30s→2min→10min→1h，6 次后死信
+        'retry_backoff' => [1, 5, 30, 120, 600, 3600],
+        'max_attempts' => (int) env('PEER_MAX_ATTEMPTS', 6),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | 实训闸门（§3.2、§10.3）
+    |--------------------------------------------------------------------------
+    | 阈值由本平台统一，调整无需对方改代码。
+    | min_score_mode：all = 所有科目均 ≥ 阈值；average = 平均 ≥ 阈值。
+    */
+    'training' => [
+        'min_score' => (int) env('TRAINING_MIN_SCORE', 90),
+        'min_score_mode' => env('TRAINING_MIN_SCORE_MODE', 'all'),
+        'rule_version' => env('TRAINING_RULE_VERSION', 'v1'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | 幂等（§6.7）
     |--------------------------------------------------------------------------
     */

@@ -76,5 +76,8 @@ class Kernel extends HttpKernel
 
         // 幂等键：写操作按 Idempotency-Key 去重（§6.7）
         'idempotency' => \App\Http\Middleware\Idempotency::class,
+
+        // 三平台对端层鉴权：X-App-Code / X-Internal-Sign（《三平台对接方案 V2.0》§5.2）
+        'peer.auth' => \App\Http\Middleware\PeerAuth::class,
     ];
 }

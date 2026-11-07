@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\WorkshopController;
 use App\Http\Controllers\Api\WorkshopInternalController;
+use App\Http\Controllers\Api\TrainingPeerController;
+use App\Http\Controllers\Api\TrainingTaskController;
 use App\Http\Controllers\IndexController;
 use Illuminate\Support\Facades\Route;
 
@@ -83,6 +85,50 @@ Route::prefix('api/v1/workshop')->middleware(['webapi', 'platform.contract', 'ga
     Route::options('{any}', function () {
         return response('', 204);
     })->where('any', '.*');
+});
+
+/**
+ * 三平台对端通道（《三平台对接方案 V2.0》§4.2、§10.2、清单 §3）
+ *
+ * 两种前缀指向同一份逻辑，区别只在链路：
+ *   /api/v1/training/peers/...           内网直连，只做对端层签名
+ *   /api/v1/training/internal/peers/...  经统一网关，网关先做 L2，应用再做对端层
+ *
+ * 应用侧不重复验 L2：internal 与 peers 落到同一个控制器，靠 peer.auth 区分身份。
+ * 这与 /api/v1/workshop/internal/*（只认 L2 签名）是两套不同契约，不要混用。
+ */
+Route::prefix('api/v1/training')->group(function () {
+    // —— 能力发现与握手：方案明确免鉴权 ——
+    Route::middleware(['webapi', 'platform.contract'])->group(function () {
+        Route::get('peers', [TrainingPeerController::class, 'discover']);
+        Route::get('internal/peers', [TrainingPeerController::class, 'discover']);
+        Route::get('peers/{source}/handshake', [TrainingPeerController::class, 'handshake']);
+        Route::get('internal/peers/{source}/handshake', [TrainingPeerController::class, 'handshake']);
+    });
+
+    // —— 服务间：对端层签名（X-App-Code / X-Request-Id / X-Timestamp / X-Internal-Sign）——
+    Route::middleware(['webapi', 'platform.contract', 'peer.auth'])->group(function () {
+        Route::get('peers/{source}/students/{userId}/training-eligibility/{taskId}', [TrainingPeerController::class, 'eligibility']);
+        Route::get('internal/peers/{source}/students/{userId}/training-eligibility/{taskId}', [TrainingPeerController::class, 'eligibility']);
+
+        Route::post('peers/{source}/events', [TrainingPeerController::class, 'events']);
+        Route::post('internal/peers/{source}/events', [TrainingPeerController::class, 'events']);
+
+        Route::get('peers/{source}/pull', [TrainingPeerController::class, 'pull']);
+        Route::get('internal/peers/{source}/pull', [TrainingPeerController::class, 'pull']);
+
+        Route::post('peers/{source}/receipts', [TrainingPeerController::class, 'receipts']);
+        Route::post('internal/peers/{source}/receipts', [TrainingPeerController::class, 'receipts']);
+
+        Route::post('peers/{source}/replay', [TrainingPeerController::class, 'replay']);
+        Route::post('internal/peers/{source}/replay', [TrainingPeerController::class, 'replay']);
+    });
+
+    // —— 业务侧：管理端勾选课程+考试（登录态，沿用招募的发布者/管理员权限）——
+    Route::middleware(['webapi', 'platform.contract', 'gateway.trust'])->group(function () {
+        Route::get('tasks/{taskId}/bindings', [TrainingTaskController::class, 'show']);
+        Route::post('tasks/{taskId}/bindings', [TrainingTaskController::class, 'publish']);
+    });
 });
 
 /**

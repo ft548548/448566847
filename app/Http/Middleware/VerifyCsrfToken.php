@@ -17,6 +17,11 @@ class VerifyCsrfToken extends Middleware
         // 校验点见 App\Services\WorkshopSession::verifyCsrf()。
         'api/v1/workshop/*',
 
+        // 三平台对端通道：服务间调用没有浏览器会话，也不可能有 CSRF token，
+        // 鉴权由 peer.auth 的对端层签名承担（X-App-Code + HMAC）。
+        // 业务侧 tasks/* 同样是服务端调用，与上面 v1 写接口保持同一处置。
+        'api/v1/training/*',
+
         // 上传图片
         'api/system/imgupload/',
 
